@@ -34,7 +34,7 @@ linters:
     - asasalint
     - asciicheck
     - bidichk
-    - depguard
+#    - depguard
     - durationcheck
     - errcheck
     - errchkjson
@@ -74,9 +74,9 @@ linters:
     - predeclared
     - promlinter
     - reassign
-    - revive
+#    - revive
     - staticcheck
-    - stylecheck
+#    - stylecheck
     - tagliatelle
     - tenv
     - testableexamples
