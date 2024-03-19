@@ -7,11 +7,10 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/logger"
-	logger2 "github.com/pershin-daniil/ninja-chat-bank/internal/logger"
 )
 
 func TestInit(t *testing.T) {
-	err := logger2.Init(logger.NewOptions("error", logger.WithProductionMode(true)))
+	err := logger.Init(logger.NewOptions("error", logger.WithProductionMode(true)))
 	require.NoError(t, err)
 
 	zap.L().Named("user-cache").Error("inconsistent state", zap.String("uid", "1234"))
