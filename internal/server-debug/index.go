@@ -1,4 +1,4 @@
-package server_debug
+package serverdebug
 
 import (
 	"html/template"
@@ -21,10 +21,7 @@ func newIndexPage() *indexPage {
 }
 
 func (i *indexPage) addPage(path string, description string) {
-	i.pages = append(i.pages, page{
-		Path:        path,
-		Description: description,
-	})
+	i.pages = append(i.pages, page{Path: path, Description: description})
 }
 
 func (i *indexPage) handler(eCtx echo.Context) error {
@@ -42,13 +39,10 @@ func (i *indexPage) handler(eCtx echo.Context) error {
 	<h2>Log Level</h2>
 	<form onSubmit="putLogLevel()">
 		<select id="log-level-select">
-			{{ range $level := .Levels }}
-				{{ if eq $.LogLevel $level }}
-					<option value="{{ $level }}" selected>{{ $level }}</option>
-				{{ else }}
-					<option value="{{ $level }}">{{ $level }}</option>
-				{{ end }}
-			{{ end }}
+			<option value="debug" {{ if eq .LogLevel "debug" }}selected{{ end }}>DEBUG</option>
+			<option value="info" {{ if eq .LogLevel "info" }}selected{{ end }}>INFO</option>
+			<option value="warn" {{ if eq .LogLevel "warn" }}selected{{ end }}>WARN</option>
+			<option value="error" {{ if eq .LogLevel "error" }}selected{{ end }}>ERROR</option>
 		</select>
 		<input type="submit" value="Change"></input>
 	</form>
@@ -67,10 +61,8 @@ func (i *indexPage) handler(eCtx echo.Context) error {
 `)).Execute(eCtx.Response(), struct {
 		Pages    []page
 		LogLevel string
-		Levels   []string
 	}{
 		Pages:    i.pages,
 		LogLevel: zap.L().Level().String(),
-		Levels:   []string{"debug", "info", "warn", "error"},
 	})
 }

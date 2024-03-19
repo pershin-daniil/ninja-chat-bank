@@ -1,10 +1,11 @@
-package server_debug
+package serverdebug
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -50,22 +51,30 @@ func New(opts Options) (*Server, error) {
 		},
 	}
 	index := newIndexPage()
-	index.addPage("/version", "Get build information")
-	index.addPage("/debug/pprof/", "Go std profiler")
-	index.addPage("/debug/pprof/profile?seconds=30", "Take half-min profile")
 
 	e.GET("/version", s.Version)
-	e.PUT("/log/level", s.LogLevel)
-	e.GET("/debug/pprof/", s.IndexHandler())
-	e.GET("/debug/pprof/allocs", s.AllocHandler())
-	e.GET("/debug/pprof/block", s.BlockHandler())
-	e.GET("/debug/pprof/cmdline", s.CmdlineHandler())
-	e.GET("/debug/pprof/goroutine", s.GoroutineHandler())
-	e.GET("/debug/pprof/heap", s.HeapHandler())
-	e.GET("/debug/pprof/mutex", s.MutexHandler())
-	e.GET("/debug/pprof/profile", s.ProfileHandler())
-	e.GET("/debug/pprof/threadcreate", s.ThreadCreateHandler())
-	e.GET("/debug/pprof/trace", s.TraceHandler())
+	index.addPage("/version", "Get build information")
+
+	e.PUT("/log/level", echo.WrapHandler(logger.Level))
+
+	{
+		pprofMux := http.NewServeMux()
+		pprofMux.HandleFunc("/debug/pprof/", pprof.Index)
+		pprofMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		pprofMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		pprofMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		pprofMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		pprofMux.HandleFunc("/debug/pprof/allocs", pprof.Handler("allocs").ServeHTTP)
+		pprofMux.HandleFunc("/debug/pprof/block", pprof.Handler("block").ServeHTTP)
+		pprofMux.HandleFunc("/debug/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
+		pprofMux.HandleFunc("/debug/pprof/heap", pprof.Handler("heap").ServeHTTP)
+		pprofMux.HandleFunc("/debug/pprof/mutex", pprof.Handler("mutex").ServeHTTP)
+		pprofMux.HandleFunc("/debug/pprof/threadcreate", pprof.Handler("threadcreate").ServeHTTP)
+
+		e.GET("/debug/pprof/*", echo.WrapHandler(pprofMux))
+		index.addPage("/debug/pprof/", "Go std profiler")
+		index.addPage("/debug/pprof/profile?seconds=30", "Take half-min profile")
+	}
 
 	e.GET("/", index.handler)
 	return s, nil
@@ -80,7 +89,7 @@ func (s *Server) Run(ctx context.Context) error {
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
-		return s.srv.Shutdown(ctx)
+		return s.srv.Shutdown(ctx) //nolint:contextcheck // graceful shutdown with new context
 	})
 
 	eg.Go(func() error {
@@ -96,17 +105,5 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) Version(eCtx echo.Context) error {
-	if err := eCtx.JSON(http.StatusOK, buildinfo.BuildInfo); err != nil {
-		return fmt.Errorf("sending version: %w", err)
-	}
-	return nil
-}
-
-func (s *Server) LogLevel(ectx echo.Context) error {
-	level := ectx.FormValue("level")
-	if err := logger.ChangeLevel(level); err != nil {
-		return fmt.Errorf("failed to change level %s: %w", level, err)
-	}
-	s.lg.Info(fmt.Sprintf("log level changed to %s", level))
-	return nil
+	return eCtx.JSON(http.StatusOK, buildinfo.BuildInfo)
 }
