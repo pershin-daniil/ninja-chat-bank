@@ -14,10 +14,11 @@ vars:
 
   TOOLS_DIR:
     sh: echo "`pwd`/bin/tools"
+
   DEV_TOOLS: |
     github.com/daixiang0/gci@v0.13.1
-    mvdan.cc/gofumpt@v0.6.0
     github.com/kazhuravlev/options-gen/cmd/options-gen@v0.32.0
+    mvdan.cc/gofumpt@v0.6.0
 
 tasks:
   default:
@@ -42,7 +43,7 @@ tasks:
     - |
       export PATH="${PATH}:{{.TOOLS_DIR}}"
       gofumpt -w {{.GO_FILES}}
-      gci write {{.GO_FILES}} --custom-order -s standard -s default -s "prefix({{.GO_MODULE}})"
+      gci write {{.GO_FILES}} --custom-order -s standard -s default -s "Prefix({{.GO_MODULE}})" 2> /dev/null
 
   lint:
     cmds:
@@ -76,11 +77,11 @@ tasks:
       - echo "- Install dev tools"
       - |
         export GOBIN="{{.TOOLS_DIR}}"
-        {{range $i, $tool := .DEV_TOOLS | trim | splitLines}}
-        go install {{$tool}}
+        {{range $i, $tool := .DEV_TOOLS | trim | splitLines -}}
+          go install {{$tool}}
         {{end}}
       - ls -l "{{.TOOLS_DIR}}"
 
   generate:
-    cmds:
-      - export PATH="${PATH}:{{.TOOLS_DIR}}" && go generate ./...
+    - echo "- Run go generate..."
+    - export PATH="${PATH}:{{.TOOLS_DIR}}" && go generate ./...

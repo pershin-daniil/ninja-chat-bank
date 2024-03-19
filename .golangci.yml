@@ -7,19 +7,98 @@ issues:
   max-same-issues: 0
 
 linters-settings:
+  exhaustive:
+    default-signifies-exhaustive: true
+
+  depguard:
+    rules:
+      main:
+        deny:
+          - pkg: "github.com/pkg/errors"
+            desc: Should be replaced by standard lib errors package
+
+  forbidigo:
+    forbid:
+      - '^(fmt\.Print(|f|ln)|print|println)$'
+      - 'errors\.Wrap'
+      - 'errors\.Cause'
+      - '(dql|DQL)'
+
   gci:
     sections:
       - standard
       - default
       - prefix(github.com/pershin-daniil/ninja-chat-bank)
     custom-order: true
+
   godox:
     keywords:
       - FIXME
       - TODO
 
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+      - shadow
+
   lll:
     line-length: 130
+
+  nolintlint:
+    allow-no-explanation: [ "lll" ]
+    require-explanation: true
+
+  revive:
+    severity: error
+    rules:
+      - name: argument-limit
+      - name: atomic
+      - name: bare-return
+      - name: blank-imports
+      - name: bool-literal-in-expr
+      - name: comment-spacings
+      - name: confusing-results
+      - name: context-as-argument
+        arguments:
+          - allowTypesBefore: "*testing.T" # https://go-review.googlesource.com/c/lint/+/145237
+      - name: context-keys-type
+      - name: datarace
+      - name: deep-exit
+      - name: defer
+      - name: dot-imports
+      - name: duplicated-imports
+      - name: early-return
+      - name: empty-lines
+      - name: empty-block
+      - name: error-naming
+      - name: error-return
+      - name: error-strings
+      - name: errorf
+      - name: exported
+      - name: identical-branches
+      - name: if-return
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: package-comments
+      - name: range
+      - name: range-val-address
+      - name: range-val-in-closure
+      - name: receiver-naming
+      - name: redefines-builtin-id
+      - name: string-of-int
+      - name: superfluous-else
+      - name: time-equal
+      - name: time-naming
+      - name: unexported-return
+      - name: unhandled-error
+        arguments: [ "fmt.Fprint", "fmt.Printf", "fmt.Println" ]
+      - name: unreachable-code
+      - name: use-any
+      - name: unused-parameter
+      - name: var-declaration
+      - name: var-naming
+      - name: waitgroup-by-value
 
   tagliatelle:
     case:
@@ -34,7 +113,9 @@ linters:
     - asasalint
     - asciicheck
     - bidichk
-#    - depguard
+    - bodyclose
+    - contextcheck
+    - depguard
     - durationcheck
     - errcheck
     - errchkjson
@@ -44,6 +125,7 @@ linters:
     - exportloopref
     - forbidigo
     - gci
+    - ginkgolinter
     - goconst
     - gocritic
     - gocyclo
@@ -61,40 +143,40 @@ linters:
     - govet
     - importas
     - ineffassign
+    - inamedparam
     - lll
     - makezero
     - misspell
     - musttag
     - nakedret
     - nestif
+    - nilerr
     - nilnil
+    - noctx
     - nolintlint
     - nosprintfhostport
+    - perfsprint
     - prealloc
     - predeclared
     - promlinter
     - reassign
-#    - revive
+    - revive
+    - rowserrcheck
+    - sloglint
     - staticcheck
-#    - stylecheck
+    - stylecheck
+    - sqlclosecheck
     - tagliatelle
     - tenv
     - testableexamples
+    - testifylint
     - testpackage
     - thelper
+    - tparallel
     - typecheck
     - unconvert
+    - unparam
     - unused
     - usestdlibvars
+    - wastedassign
     - whitespace
-
-    # Broken due to https://github.com/golangci/golangci-lint/issues/3711
-    # - bodyclose
-    # - contextcheck
-    # - nilerr
-    # - noctx
-    # - rowserrcheck
-    # - sqlclosecheck
-    # - tparallel
-    # - unparam
-    # - wastedassign
