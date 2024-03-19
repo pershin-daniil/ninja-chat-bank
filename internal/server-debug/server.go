@@ -1,0 +1,109 @@
+package serverdebug
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/pprof"
+	"time"
+
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/pershin-daniil/ninja-chat-bank/internal/buildinfo"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/logger"
+)
+
+const (
+	readHeaderTimeout = time.Second
+	shutdownTimeout   = 3 * time.Second
+)
+
+//go:generate options-gen -out-filename=server_options.gen.go -from-struct=Options
+type Options struct {
+	addr string `option:"mandatory" validate:"required,hostname_port"`
+}
+
+type Server struct {
+	lg  *zap.Logger
+	srv *http.Server
+}
+
+func New(opts Options) (*Server, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, fmt.Errorf("failed to validate options: %v", err)
+	}
+
+	lg := zap.L().Named("server-debug")
+
+	e := echo.New()
+	e.Use(middleware.Recover())
+
+	s := &Server{
+		lg: lg,
+		srv: &http.Server{
+			Addr:              opts.addr,
+			Handler:           e,
+			ReadHeaderTimeout: readHeaderTimeout,
+		},
+	}
+	index := newIndexPage()
+
+	e.GET("/version", s.Version)
+	index.addPage("/version", "Get build information")
+
+	e.PUT("/log/level", echo.WrapHandler(logger.Level))
+
+	{
+		pprofMux := http.NewServeMux()
+		pprofMux.HandleFunc("/debug/pprof/", pprof.Index)
+		pprofMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		pprofMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		pprofMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		pprofMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		pprofMux.HandleFunc("/debug/pprof/allocs", pprof.Handler("allocs").ServeHTTP)
+		pprofMux.HandleFunc("/debug/pprof/block", pprof.Handler("block").ServeHTTP)
+		pprofMux.HandleFunc("/debug/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
+		pprofMux.HandleFunc("/debug/pprof/heap", pprof.Handler("heap").ServeHTTP)
+		pprofMux.HandleFunc("/debug/pprof/mutex", pprof.Handler("mutex").ServeHTTP)
+		pprofMux.HandleFunc("/debug/pprof/threadcreate", pprof.Handler("threadcreate").ServeHTTP)
+
+		e.GET("/debug/pprof/*", echo.WrapHandler(pprofMux))
+		index.addPage("/debug/pprof/", "Go std profiler")
+		index.addPage("/debug/pprof/profile?seconds=30", "Take half-min profile")
+	}
+
+	e.GET("/", index.handler)
+	return s, nil
+}
+
+func (s *Server) Run(ctx context.Context) error {
+	eg, ctx := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		<-ctx.Done()
+
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+
+		return s.srv.Shutdown(ctx) //nolint:contextcheck // graceful shutdown with new context
+	})
+
+	eg.Go(func() error {
+		s.lg.Info("listen and serve", zap.String("addr", s.srv.Addr))
+
+		if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("listen and serve: %v", err)
+		}
+		return nil
+	})
+
+	return eg.Wait()
+}
+
+func (s *Server) Version(eCtx echo.Context) error {
+	return eCtx.JSON(http.StatusOK, buildinfo.BuildInfo)
+}
