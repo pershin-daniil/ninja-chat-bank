@@ -3,11 +3,13 @@ version: "3.8"
 services:
   redis:
     image: redis:7.2.4-alpine
-    restart: on-failure
     profiles: [ sentry ]
 
   sentry:
     image: sentry:9.1.2
+    depends_on:
+      - redis
+      - postgres
     links:
       - redis
       - postgres
@@ -18,13 +20,10 @@ services:
     environment:
       SENTRY_SECRET_KEY: 'secret'
       SENTRY_POSTGRES_HOST: postgres
+      SENTRY_DB_NAME: sentry
       SENTRY_DB_USER: sentry
       SENTRY_DB_PASSWORD: sentry
       SENTRY_REDIS_HOST: redis
-    depends_on:
-      - postgres
-      - redis
-    restart: on-failure
     volumes:
       - sentry-data:/var/lib/sentry/files
     profiles: [ sentry ]
@@ -41,6 +40,7 @@ services:
     environment:
       SENTRY_SECRET_KEY: 'secret'
       SENTRY_POSTGRES_HOST: postgres
+      SENTRY_DB_NAME: sentry
       SENTRY_DB_USER: sentry
       SENTRY_DB_PASSWORD: sentry
       SENTRY_REDIS_HOST: redis
@@ -60,6 +60,7 @@ services:
     environment:
       SENTRY_SECRET_KEY: 'secret'
       SENTRY_POSTGRES_HOST: postgres
+      SENTRY_DB_NAME: sentry
       SENTRY_DB_USER: sentry
       SENTRY_DB_PASSWORD: sentry
       SENTRY_REDIS_HOST: redis

@@ -120,6 +120,12 @@ tasks:
         vars:
           SERVICE: postgres
 
+  deps:reset-sentry:
+    cmds:
+      - task: deps:reset
+        vars:
+          SERVICE: sentry sentry-worker cron redis
+
   deps:reset:
     internal: true
     cmds:

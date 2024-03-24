@@ -52,7 +52,7 @@ func New(opts Options) (*Server, error) {
 	}
 	index := newIndexPage()
 
-	e.GET("/version", s.Version)
+	e.GET("/version", s.version)
 	index.addPage("/version", "Get build information")
 
 	e.PUT("/log/level", echo.WrapHandler(logger.Level))
@@ -75,6 +75,12 @@ func New(opts Options) (*Server, error) {
 		index.addPage("/debug/pprof/", "Go std profiler")
 		index.addPage("/debug/pprof/profile?seconds=30", "Take half-min profile")
 	}
+
+	e.GET("/debug/error", s.error)
+	index.addPage("/debug/error", "Send Sentry error event")
+
+	e.GET("/debug/log-levels", s.logLevels)
+	index.addPage("/debug/log-levels", "Send all log levels messages")
 
 	e.GET("/", index.handler)
 	return s, nil
@@ -104,6 +110,21 @@ func (s *Server) Run(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func (s *Server) Version(eCtx echo.Context) error {
+func (s *Server) version(eCtx echo.Context) error {
 	return eCtx.JSON(http.StatusOK, buildinfo.BuildInfo)
+}
+
+func (s *Server) logLevels(eCtx echo.Context) error {
+	s.lg.Debug("🐞 DEBUG")
+	s.lg.Info("ℹ️ INFO")
+	s.lg.Warn("⚠️ WARN")
+	s.lg.Error("❌ ERROR")
+
+	return eCtx.String(http.StatusOK, "events sent")
+}
+
+func (s *Server) error(eCtx echo.Context) error {
+	s.lg.Error("❌ ERROR")
+
+	return eCtx.String(http.StatusOK, "event sent")
 }

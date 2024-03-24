@@ -4,6 +4,7 @@ type Config struct {
 	Global  GlobalConfig  `toml:"global"`
 	Log     LogConfig     `toml:"log"`
 	Servers ServersConfig `toml:"servers"`
+	Sentry  SentryConfig  `toml:"sentry"`
 }
 
 type GlobalConfig struct {
@@ -20,6 +21,10 @@ type ServersConfig struct {
 
 type DebugServerConfig struct {
 	Addr string `toml:"addr" validate:"required,hostname_port"`
+}
+
+type SentryConfig struct {
+	DSN string `toml:"dsn"`
 }
 
 func (c Config) IsProduction() bool {
