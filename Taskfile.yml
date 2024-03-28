@@ -26,6 +26,14 @@ vars:
 
   DOCKER_COMPOSE_CMD: docker compose{{range $i, $path := .DOCKER_COMPOSE_PATHS | trim | splitLines -}}{{printf " -f %q" $path}}{{end}}
 
+  TYPES: |
+    ChatID
+    MessageID
+    ProblemID
+    UserID
+  TYPES_PKG: types
+  TYPES_DST: ./internal/types/types.gen.go
+
 tasks:
   default:
     cmds:
@@ -91,6 +99,12 @@ tasks:
   generate:
     - echo "- Run go generate..."
     - export PATH="${PATH}:{{.TOOLS_DIR}}" && go generate ./...
+    - task: gen:types
+
+  gen:types:
+    cmds:
+      - echo "- Generate types..."
+      - go run ./cmd/gen-types types {{range $i, $type := .TYPES | trim | splitLines}}{{$type}},{{end}} internal/types/types.gen.go
 
   deps:
     cmds:
@@ -131,3 +145,4 @@ tasks:
     cmds:
       - "{{.DOCKER_COMPOSE_CMD}} rm -fsv {{.SERVICE}}"
       - "{{.DOCKER_COMPOSE_CMD}} up -d {{.SERVICE}}"
+
