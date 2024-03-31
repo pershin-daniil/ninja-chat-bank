@@ -14,5 +14,23 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.2
+    depends_on:
+      - postgres
+    command:
+      - start-dev
+    environment:
+      DB_VENDOR: POSTGRES
+      DB_ADDR: postgres
+      DB_SCHEMA: public
+      DB_DATABASE: keycloak
+      DB_USER: keycloak
+      DB_PASSWORD: keycloak
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "127.0.0.1:3010:8080"
+
 volumes:
   postgresql-data:
