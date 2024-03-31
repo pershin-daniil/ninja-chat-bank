@@ -6,7 +6,7 @@ silent: true
 vars:
   GO_MODULE: github.com/pershin-daniil/ninja-chat-bank
   GO_FILES:
-    sh: find . -type f -name '*.go' -not -path "./vendor/*" -not -path "*.gen.go" | tr "\n" " "
+    sh: find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./internal/store/*" -not -path "*.gen.go" | tr "\n" " "
 
   GOLANGCI_LINT_VERSION: v1.56.2
   GOLANGCI_LINT_CACHE:
@@ -19,6 +19,8 @@ vars:
     github.com/daixiang0/gci@v0.13.1
     github.com/kazhuravlev/options-gen/cmd/options-gen@v0.32.0
     mvdan.cc/gofumpt@v0.6.0
+    entgo.io/ent/cmd/ent@v0.11.10
+
 
   DOCKER_COMPOSE_PATHS: |
     ./deploy/local/docker-compose.yml
@@ -33,6 +35,9 @@ vars:
     UserID
   TYPES_PKG: types
   TYPES_DST: ./internal/types/types.gen.go
+
+  ENT_SCHEMA: ./internal/store/schema
+
 
 tasks:
   default:
@@ -100,11 +105,22 @@ tasks:
     - echo "- Run go generate..."
     - export PATH="${PATH}:{{.TOOLS_DIR}}" && go generate ./...
     - task: gen:types
+    - task: ent:gen
 
   gen:types:
     cmds:
       - echo "- Generate types..."
       - go run ./cmd/gen-types types {{range $i, $type := .TYPES | trim | splitLines}}{{$type}},{{end}} internal/types/types.gen.go
+
+  ent:new:
+    cmds:
+      - go run -mod=mod entgo.io/ent/cmd/ent new --target ./internal/store/schema {{$.CLI_ARGS}}
+      - task: tidy
+
+  ent:gen:
+    cmds:
+      - go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/upsert,sql/lock {{.ENT_SCHEMA}}
+      - task: tidy
 
   deps:
     cmds:

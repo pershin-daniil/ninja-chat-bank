@@ -1,10 +1,11 @@
 run:
   tests: true
   build-tags: [ ] # Ждёт своего часа.
-  skip-dirs: [ ] # Ждёт своего часа.
 
 issues:
   max-same-issues: 0
+  exclude-dirs:
+    - internal/store/*
 
 linters-settings:
   exhaustive:
