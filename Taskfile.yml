@@ -85,6 +85,18 @@ tasks:
       - echo "- Tests"
       - go test -race ./...
 
+  tests:integration:
+    env:
+      TEST_LOG_LEVEL: info
+      TEST_KEYCLOAK_REALM: Bank
+      TEST_KEYCLOAK_CLIENT_ID: integration-testing
+      TEST_KEYCLOAK_CLIENT_SECRET: biq7WcbKHgVaalqZDlhqINEi1yGK6aOw
+      TEST_KEYCLOAK_TEST_USER: integration_testing
+      TEST_KEYCLOAK_TEST_PASSWORD: integration_testing
+    cmds:
+      - echo "- Integration tests"
+      - go test -tags integration -count 1 -race ./...
+
   build:
     cmds:
       - echo "- Build"

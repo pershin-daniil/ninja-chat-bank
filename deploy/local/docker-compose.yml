@@ -30,7 +30,7 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
     ports:
-      - "127.0.0.1:3010:8080"
+      - "3010:8080"
 
 volumes:
   postgresql-data:

@@ -32,7 +32,7 @@ func MustInit(opts Options) {
 
 func Init(opts Options) error {
 	if err := opts.Validate(); err != nil {
-		return fmt.Errorf("failed to validate options: %v", err)
+		return fmt.Errorf("failed to validate options logger: %v", err)
 	}
 
 	var err error

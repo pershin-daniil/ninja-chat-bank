@@ -34,7 +34,7 @@ type Server struct {
 
 func New(opts Options) (*Server, error) {
 	if err := opts.Validate(); err != nil {
-		return nil, fmt.Errorf("failed to validate options: %v", err)
+		return nil, fmt.Errorf("failed to validate options serverdebug: %v", err)
 	}
 
 	lg := zap.L().Named("server-debug")
