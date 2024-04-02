@@ -97,6 +97,13 @@ tasks:
       - echo "- Integration tests"
       - go test -tags integration -count 1 -race ./...
 
+  kc:export:
+    cmds:
+      - echo "- Exporting realm"
+      - "{{.DOCKER_COMPOSE_CMD}} exec keycloak /opt/keycloak/bin/kc.sh export \
+          --realm Bank \
+          --file /dev/stdout > ./deploy/local/keycloak-bank-realm.json"
+
   build:
     cmds:
       - echo "- Build"
