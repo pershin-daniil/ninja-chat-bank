@@ -15,12 +15,14 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/pershin-daniil/ninja-chat-bank/internal/middlewares"
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
 )
 
 const (
 	readHeaderTimeout = time.Second
 	shutdownTimeout   = 3 * time.Second
+	bodyLimit         = "12KB"
 )
 
 //go:generate options-gen -out-filename=server_options.gen.go -from-struct=Options
@@ -30,6 +32,9 @@ type Options struct {
 	allowOrigins []string                 `option:"mandatory" validate:"min=1"`
 	v1Swagger    *openapi3.T              `option:"mandatory" validate:"required"`
 	v1Handlers   clientv1.ServerInterface `option:"mandatory" validate:"required"`
+	introspector middlewares.Introspector `option:"mandatory" validate:"required"`
+	resource     string                   `option:"mandatory" validate:"required"`
+	role         string                   `option:"mandatory" validat:"required"`
 }
 
 type Server struct {
@@ -45,10 +50,40 @@ func New(opts Options) (*Server, error) {
 	e := echo.New()
 	e.Use(
 		middleware.Recover(),
+		middleware.BodyLimit(bodyLimit),
+		middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+			LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+				if c.Request().Method == http.MethodOptions {
+					return nil
+				}
+				opts.logger.Info("request",
+					zap.Duration("latency", v.Latency),
+					zap.String("remote_ip", v.RemoteIP),
+					zap.String("host", v.Host),
+					zap.String("method", v.Method),
+					zap.String("path", v.RoutePath),
+					zap.String("request_id", v.RequestID),
+					zap.String("user_agent", v.UserAgent),
+					zap.Int("status", v.Status),
+					zap.String("user_id", middlewares.MustUserID(c).String()),
+				)
+				return nil
+			},
+			LogLatency:   true,
+			LogRemoteIP:  true,
+			LogHost:      true,
+			LogMethod:    true,
+			LogRoutePath: true,
+			LogRequestID: true,
+			LogUserAgent: true,
+			LogStatus:    true,
+			LogError:     true,
+		}),
 		middleware.CORSWithConfig(middleware.CORSConfig{
 			AllowOrigins: opts.allowOrigins,
 			AllowMethods: []string{http.MethodPost},
 		}),
+		middlewares.NewKeycloakTokenAuth(opts.introspector, opts.resource, opts.role),
 	)
 
 	v1 := e.Group("v1", oapimdlwr.OapiRequestValidatorWithOptions(opts.v1Swagger, &oapimdlwr.Options{
@@ -82,7 +117,7 @@ func (s *Server) Run(ctx context.Context) error {
 		gfCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
-		if err := s.srv.Shutdown(gfCtx); err != nil {
+		if err := s.srv.Shutdown(gfCtx); err != nil { //nolint:contextcheck // graceful shutdown with new context
 			return fmt.Errorf("failed to graceful shutdown: %v", err)
 		}
 

@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	keycloakclient "github.com/pershin-daniil/ninja-chat-bank/internal/clients/keycloak"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/config"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/logger"
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
@@ -45,17 +46,39 @@ func run() (errReturned error) {
 	}
 	defer logger.Sync()
 
-	srvDebug, err := serverdebug.New(serverdebug.NewOptions(cfg.Servers.Debug.Addr))
-	if err != nil {
-		return fmt.Errorf("failed to init debug server: %v", err)
-	}
-
 	swagger, err := clientv1.GetSwagger()
 	if err != nil {
 		return fmt.Errorf("failed to get swagger: %v", err)
 	}
 
-	srvClient, err := initServerClient(cfg.Servers.Client.Addr, cfg.Servers.Client.AllowOrigins, swagger)
+	srvDebug, err := serverdebug.New(serverdebug.NewOptions(cfg.Servers.Debug.Addr, swagger))
+	if err != nil {
+		return fmt.Errorf("failed to init debug server: %v", err)
+	}
+
+	kcClient, err := keycloakclient.New(keycloakclient.NewOptions(
+		cfg.Clients.Keycloak.BasePath,
+		cfg.Clients.Keycloak.Realm,
+		cfg.Clients.Keycloak.ClientID,
+		cfg.Clients.Keycloak.ClientSecret,
+		cfg.IsProduction(),
+		keycloakclient.WithDebugMode(cfg.Clients.Keycloak.DebugMode),
+	))
+	if err != nil {
+		return fmt.Errorf("init keycloak client: %w", err)
+	}
+
+	srvClient, err := initServerClient(
+		cfg.Servers.Client.Addr,
+		cfg.Servers.Client.AllowOrigins,
+		swagger,
+		kcClient,
+		cfg.Servers.Client.RequiredAccess.Resource,
+		cfg.Servers.Client.RequiredAccess.Role,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to init server: %v", err)
+	}
 
 	eg, ctx := errgroup.WithContext(ctx)
 

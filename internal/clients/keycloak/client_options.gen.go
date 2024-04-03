@@ -15,6 +15,7 @@ func NewOptions(
 	realm string,
 	clientID string,
 	clientSecret string,
+	production bool,
 	options ...OptOptionsSetter,
 ) Options {
 	o := Options{}
@@ -25,6 +26,7 @@ func NewOptions(
 	o.realm = realm
 	o.clientID = clientID
 	o.clientSecret = clientSecret
+	o.production = production
 
 	for _, opt := range options {
 		opt(&o)
