@@ -26,7 +26,7 @@ type Client struct {
 
 func New(opts Options) (*Client, error) {
 	if err := opts.Validate(); err != nil {
-		return nil, fmt.Errorf("validate options: %v", err)
+		return nil, fmt.Errorf("validate options keycloakclient: %v", err)
 	}
 
 	cli := resty.New()

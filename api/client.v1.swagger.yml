@@ -70,7 +70,7 @@ components:
     MessagesPage:
       required: [ messages ]
       properties:
-        message:
+        messages:
           type: array
           items:
             $ref: "#/components/schemas/Message"
