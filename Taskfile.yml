@@ -20,11 +20,13 @@ vars:
     github.com/kazhuravlev/options-gen/cmd/options-gen@v0.32.0
     mvdan.cc/gofumpt@v0.6.0
     entgo.io/ent/cmd/ent@v0.11.10
+    github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.1.0
 
 
   DOCKER_COMPOSE_PATHS: |
     ./deploy/local/docker-compose.yml
     ./deploy/local/docker-compose.sentry.yml
+    ./deploy/local/docker-compose.swagger-ui.yml
 
   DOCKER_COMPOSE_CMD: docker compose{{range $i, $path := .DOCKER_COMPOSE_PATHS | trim | splitLines -}}{{printf " -f %q" $path}}{{end}}
 
@@ -33,11 +35,15 @@ vars:
     MessageID
     ProblemID
     UserID
+    RequestID
   TYPES_PKG: types
   TYPES_DST: ./internal/types/types.gen.go
 
   ENT_SCHEMA: ./internal/store/schema
 
+  CLIENT_V1_PKG: clientv1
+  CLIENT_V1_SRC: ./api/client.v1.swagger.yml
+  CLIENT_V1_DST: ./internal/server-client/v1/server.gen.go
 
 tasks:
   default:
@@ -125,6 +131,7 @@ tasks:
     - export PATH="${PATH}:{{.TOOLS_DIR}}" && go generate ./...
     - task: gen:types
     - task: ent:gen
+    - task: gen:api
 
   gen:types:
     cmds:
@@ -141,6 +148,11 @@ tasks:
       - go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/upsert,sql/lock {{.ENT_SCHEMA}}
       - task: tidy
 
+  gen:api:
+    dir: "{{.TOOLS_DIR}}"
+    cmds:
+      - ./oapi-codegen -old-config-style -package {{.CLIENT_V1_PKG }} ../../{{.CLIENT_V1_SRC}} > ../../{{.CLIENT_V1_DST}}
+
   deps:
     cmds:
       - echo "- Run deps containers"
@@ -152,7 +164,7 @@ tasks:
 
   deps:status:
     cmds:
-      - "{{.DOCKER_COMPOSE_CMD}}  ps"
+      - "{{.DOCKER_COMPOSE_CMD}} ps"
 
   deps:logs:
     cmds:

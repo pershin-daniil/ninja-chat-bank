@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    profiles: [ "swagger-ui" ]
+    ports:
+      - "127.0.0.1:3011:8080"
+    environment:
+      SWAGGER_JSON: "/api/client.v1.swagger.yml"
+      URLS: "[{url: 'client.v1.swagger.yml', name: 'client.v1.swagger'}]"
+    volumes:
+      - ../../api:/api

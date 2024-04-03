@@ -354,3 +354,83 @@ func (id UserID) Matches(x any) bool {
 func (id UserID) IsZero() bool {
 	return id.String() == "" || id == UserIDNil
 }
+
+type RequestID uuid.UUID
+
+var RequestIDNil = RequestID(uuid.Nil)
+
+func NewRequestID() RequestID {
+	return RequestID(uuid.New())
+}
+
+func (id RequestID) String() string {
+	return uuid.UUID(id).String()
+}
+
+func (id RequestID) MarshalText() ([]byte, error) {
+	return []byte(uuid.UUID(id).String()), nil
+}
+
+func (id *RequestID) UnmarshalText(text []byte) error {
+	if id == nil {
+		return ErrEntityIsNil
+	}
+
+	val, err := uuid.ParseBytes(text)
+	if err != nil {
+		return err
+	}
+
+	*id = RequestID(val)
+
+	return nil
+}
+
+func (id RequestID) Value() (driver.Value, error) {
+	return uuid.UUID(id).Value()
+}
+
+func (id *RequestID) Scan(src any) error {
+	if id == nil {
+		return ErrEntityIsNil
+	}
+
+	val := uuid.Nil
+
+	if err := val.Scan(src); err != nil {
+		return err
+	}
+
+	*id = RequestID(val)
+
+	return nil
+}
+
+func (id RequestID) Validate() error {
+	if id.IsZero() {
+		return ErrZeroID
+	}
+
+	_, err := uuid.Parse(id.String())
+
+	return err
+}
+
+func (id RequestID) Matches(x any) bool {
+	switch x.(type) {
+	case RequestID:
+		if id == x.(RequestID) {
+			return true
+		}
+	case *RequestID:
+		if x.(*RequestID) != nil && id == *x.(*RequestID) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (id RequestID) IsZero() bool {
+	return id.String() == "" || id == RequestIDNil
+}
