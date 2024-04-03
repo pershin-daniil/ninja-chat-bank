@@ -1,11 +1,3 @@
-2024-04-02 16:09:29,298 WARN  [org.infinispan.CONFIG] (keycloak-cache-init) ISPN000569: Unable to persist Infinispan internal caches as no global state enabled
-2024-04-02 16:09:29,351 INFO  [org.infinispan.CONTAINER] (keycloak-cache-init) ISPN000556: Starting user marshaller 'org.infinispan.jboss.marshalling.core.JBossUserMarshaller'
-2024-04-02 16:09:29,541 INFO  [org.keycloak.quarkus.runtime.hostname.DefaultHostnameProvider] (main) Hostname settings: Base URL: <unset>, Hostname: <request>, Strict HTTPS: false, Path: <request>, Strict BackChannel: false, Admin URL: <unset>, Admin: <request>, Port: -1, Proxied: false
-2024-04-02 16:09:30,952 WARN  [io.quarkus.agroal.runtime.DataSources] (JPA Startup Thread) Datasource <default> enables XA but transaction recovery is not enabled. Please enable transaction recovery by setting quarkus.transaction-manager.enable-recovery=true, otherwise data may be lost if the application is terminated abruptly
-2024-04-02 16:09:31,525 INFO  [org.keycloak.broker.provider.AbstractIdentityProviderMapper] (main) Registering class org.keycloak.broker.provider.mappersync.ConfigSyncEventListener
-2024-04-02 16:09:31,851 INFO  [org.keycloak.connections.infinispan.DefaultInfinispanConnectionProviderFactory] (main) Node name: node_111438, Site name: null
-2024-04-02 16:09:32,490 INFO  [org.keycloak.services] (main) KC-SERVICES0034: Export of realm 'Bank' requested.
-2024-04-02 16:09:32,491 INFO  [org.keycloak.exportimport.singlefile.SingleFileExportProvider] (main) Exporting realm 'Bank' into file /dev/stdout
 {
   "id" : "e6ffce97-e4ff-4048-b186-540b36525388",
   "realm" : "Bank",
@@ -1935,8 +1927,4 @@
   "clientPolicies" : {
     "policies" : [ ]
   }
-}2024-04-02 16:09:33,249 INFO  [org.keycloak.services] (main) KC-SERVICES0035: Export finished successfully
-2024-04-02 16:09:33,282 INFO  [io.quarkus] (main) Keycloak 24.0.2 on JVM (powered by Quarkus 3.8.3) started in 5.032s. Listening on: 
-2024-04-02 16:09:33,282 INFO  [io.quarkus] (main) Profile import_export activated. 
-2024-04-02 16:09:33,282 INFO  [io.quarkus] (main) Installed features: [agroal, cdi, hibernate-orm, jdbc-h2, keycloak, logging-gelf, narayana-jta, reactive-routes, resteasy-reactive, resteasy-reactive-jackson, smallrye-context-propagation, vertx]
-2024-04-02 16:09:33,336 INFO  [io.quarkus] (main) Keycloak stopped in 0.048s
+}

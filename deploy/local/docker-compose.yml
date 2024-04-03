@@ -18,8 +18,7 @@ services:
     image: quay.io/keycloak/keycloak:24.0.2
     depends_on:
       - postgres
-    command:
-      - start-dev --import-realm
+    command: start-dev --import-realm
     environment:
       DB_VENDOR: POSTGRES
       DB_ADDR: postgres
@@ -30,7 +29,7 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
     volumes:
-      - ./keycloak-bank-realm.json:/opt/keycloak/data/import/bank-realm.json
+      - ./:/opt/keycloak/data/import
     ports:
       - "3010:8080"
 
