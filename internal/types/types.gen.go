@@ -3,434 +3,145 @@ package types
 
 import (
 	"database/sql/driver"
-	"encoding"
 	"errors"
+
 	"github.com/google/uuid"
 )
 
-var (
-	ErrEntityIsNil     = errors.New("entity is nil")
-	ErrUnparsableValue = errors.New("unparsable value")
-	ErrZeroID          = errors.New("id is zero")
-)
-
-func Parse[T any](s string) (T, error) {
-	var val T
-
-	if v, ok := any(&val).(encoding.TextUnmarshaler); ok {
-		err := v.UnmarshalText([]byte(s))
-		return val, err
-	}
-
-	return val, ErrUnparsableValue
-}
-
-func MustParse[T any](s string) T {
-	res, err := Parse[T](s)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return res
-}
+var ChatIDNil = ChatID(uuid.Nil)
 
 type ChatID uuid.UUID
 
-var ChatIDNil = ChatID(uuid.Nil)
-
-func NewChatID() ChatID {
-	return ChatID(uuid.New())
-}
-
-func (id ChatID) String() string {
-	return uuid.UUID(id).String()
-}
-
-func (id ChatID) MarshalText() ([]byte, error) {
-	return []byte(uuid.UUID(id).String()), nil
-}
-
-func (id *ChatID) UnmarshalText(text []byte) error {
-	if id == nil {
-		return ErrEntityIsNil
+func NewChatID() ChatID                           { return ChatID(uuid.New()) }
+func (t ChatID) String() string                   { return uuid.UUID(t).String() }
+func (t ChatID) Value() (driver.Value, error)     { return t.String(), nil }
+func (t *ChatID) Scan(src any) error              { return (*uuid.UUID)(t).Scan(src) }
+func (t ChatID) MarshalText() ([]byte, error)     { return uuid.UUID(t).MarshalText() }
+func (t *ChatID) UnmarshalText(data []byte) error { return (*uuid.UUID)(t).UnmarshalText(data) }
+func (t ChatID) IsZero() bool                     { return t == ChatIDNil }
+func (t ChatID) Matches(x any) bool {
+	v, ok := x.(ChatID)
+	if !ok {
+		return false
 	}
-
-	val, err := uuid.ParseBytes(text)
-	if err != nil {
-		return err
+	return t.String() == v.String()
+}
+func (t ChatID) Validate() error {
+	if t.IsZero() {
+		return errors.New("zero ChatID")
 	}
-
-	*id = ChatID(val)
-
 	return nil
 }
-
-func (id ChatID) Value() (driver.Value, error) {
-	return uuid.UUID(id).Value()
-}
-
-func (id *ChatID) Scan(src any) error {
-	if id == nil {
-		return ErrEntityIsNil
-	}
-
-	val := uuid.Nil
-
-	if err := val.Scan(src); err != nil {
-		return err
-	}
-
-	*id = ChatID(val)
-
-	return nil
-}
-
-func (id ChatID) Validate() error {
-	if id.IsZero() {
-		return ErrZeroID
-	}
-
-	_, err := uuid.Parse(id.String())
-
-	return err
-}
-
-func (id ChatID) Matches(x any) bool {
-	switch x.(type) {
-	case ChatID:
-		if id == x.(ChatID) {
-			return true
-		}
-	case *ChatID:
-		if x.(*ChatID) != nil && id == *x.(*ChatID) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (id ChatID) IsZero() bool {
-	return id.String() == "" || id == ChatIDNil
-}
-
-type MessageID uuid.UUID
 
 var MessageIDNil = MessageID(uuid.Nil)
 
-func NewMessageID() MessageID {
-	return MessageID(uuid.New())
-}
+type MessageID uuid.UUID
 
-func (id MessageID) String() string {
-	return uuid.UUID(id).String()
-}
-
-func (id MessageID) MarshalText() ([]byte, error) {
-	return []byte(uuid.UUID(id).String()), nil
-}
-
-func (id *MessageID) UnmarshalText(text []byte) error {
-	if id == nil {
-		return ErrEntityIsNil
+func NewMessageID() MessageID                        { return MessageID(uuid.New()) }
+func (t MessageID) String() string                   { return uuid.UUID(t).String() }
+func (t MessageID) Value() (driver.Value, error)     { return t.String(), nil }
+func (t *MessageID) Scan(src any) error              { return (*uuid.UUID)(t).Scan(src) }
+func (t MessageID) MarshalText() ([]byte, error)     { return uuid.UUID(t).MarshalText() }
+func (t *MessageID) UnmarshalText(data []byte) error { return (*uuid.UUID)(t).UnmarshalText(data) }
+func (t MessageID) IsZero() bool                     { return t == MessageIDNil }
+func (t MessageID) Matches(x any) bool {
+	v, ok := x.(MessageID)
+	if !ok {
+		return false
 	}
-
-	val, err := uuid.ParseBytes(text)
-	if err != nil {
-		return err
+	return t.String() == v.String()
+}
+func (t MessageID) Validate() error {
+	if t.IsZero() {
+		return errors.New("zero MessageID")
 	}
-
-	*id = MessageID(val)
-
 	return nil
 }
-
-func (id MessageID) Value() (driver.Value, error) {
-	return uuid.UUID(id).Value()
-}
-
-func (id *MessageID) Scan(src any) error {
-	if id == nil {
-		return ErrEntityIsNil
-	}
-
-	val := uuid.Nil
-
-	if err := val.Scan(src); err != nil {
-		return err
-	}
-
-	*id = MessageID(val)
-
-	return nil
-}
-
-func (id MessageID) Validate() error {
-	if id.IsZero() {
-		return ErrZeroID
-	}
-
-	_, err := uuid.Parse(id.String())
-
-	return err
-}
-
-func (id MessageID) Matches(x any) bool {
-	switch x.(type) {
-	case MessageID:
-		if id == x.(MessageID) {
-			return true
-		}
-	case *MessageID:
-		if x.(*MessageID) != nil && id == *x.(*MessageID) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (id MessageID) IsZero() bool {
-	return id.String() == "" || id == MessageIDNil
-}
-
-type ProblemID uuid.UUID
 
 var ProblemIDNil = ProblemID(uuid.Nil)
 
-func NewProblemID() ProblemID {
-	return ProblemID(uuid.New())
-}
+type ProblemID uuid.UUID
 
-func (id ProblemID) String() string {
-	return uuid.UUID(id).String()
-}
-
-func (id ProblemID) MarshalText() ([]byte, error) {
-	return []byte(uuid.UUID(id).String()), nil
-}
-
-func (id *ProblemID) UnmarshalText(text []byte) error {
-	if id == nil {
-		return ErrEntityIsNil
+func NewProblemID() ProblemID                        { return ProblemID(uuid.New()) }
+func (t ProblemID) String() string                   { return uuid.UUID(t).String() }
+func (t ProblemID) Value() (driver.Value, error)     { return t.String(), nil }
+func (t *ProblemID) Scan(src any) error              { return (*uuid.UUID)(t).Scan(src) }
+func (t ProblemID) MarshalText() ([]byte, error)     { return uuid.UUID(t).MarshalText() }
+func (t *ProblemID) UnmarshalText(data []byte) error { return (*uuid.UUID)(t).UnmarshalText(data) }
+func (t ProblemID) IsZero() bool                     { return t == ProblemIDNil }
+func (t ProblemID) Matches(x any) bool {
+	v, ok := x.(ProblemID)
+	if !ok {
+		return false
 	}
-
-	val, err := uuid.ParseBytes(text)
-	if err != nil {
-		return err
+	return t.String() == v.String()
+}
+func (t ProblemID) Validate() error {
+	if t.IsZero() {
+		return errors.New("zero ProblemID")
 	}
-
-	*id = ProblemID(val)
-
 	return nil
 }
-
-func (id ProblemID) Value() (driver.Value, error) {
-	return uuid.UUID(id).Value()
-}
-
-func (id *ProblemID) Scan(src any) error {
-	if id == nil {
-		return ErrEntityIsNil
-	}
-
-	val := uuid.Nil
-
-	if err := val.Scan(src); err != nil {
-		return err
-	}
-
-	*id = ProblemID(val)
-
-	return nil
-}
-
-func (id ProblemID) Validate() error {
-	if id.IsZero() {
-		return ErrZeroID
-	}
-
-	_, err := uuid.Parse(id.String())
-
-	return err
-}
-
-func (id ProblemID) Matches(x any) bool {
-	switch x.(type) {
-	case ProblemID:
-		if id == x.(ProblemID) {
-			return true
-		}
-	case *ProblemID:
-		if x.(*ProblemID) != nil && id == *x.(*ProblemID) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (id ProblemID) IsZero() bool {
-	return id.String() == "" || id == ProblemIDNil
-}
-
-type UserID uuid.UUID
-
-var UserIDNil = UserID(uuid.Nil)
-
-func NewUserID() UserID {
-	return UserID(uuid.New())
-}
-
-func (id UserID) String() string {
-	return uuid.UUID(id).String()
-}
-
-func (id UserID) MarshalText() ([]byte, error) {
-	return []byte(uuid.UUID(id).String()), nil
-}
-
-func (id *UserID) UnmarshalText(text []byte) error {
-	if id == nil {
-		return ErrEntityIsNil
-	}
-
-	val, err := uuid.ParseBytes(text)
-	if err != nil {
-		return err
-	}
-
-	*id = UserID(val)
-
-	return nil
-}
-
-func (id UserID) Value() (driver.Value, error) {
-	return uuid.UUID(id).Value()
-}
-
-func (id *UserID) Scan(src any) error {
-	if id == nil {
-		return ErrEntityIsNil
-	}
-
-	val := uuid.Nil
-
-	if err := val.Scan(src); err != nil {
-		return err
-	}
-
-	*id = UserID(val)
-
-	return nil
-}
-
-func (id UserID) Validate() error {
-	if id.IsZero() {
-		return ErrZeroID
-	}
-
-	_, err := uuid.Parse(id.String())
-
-	return err
-}
-
-func (id UserID) Matches(x any) bool {
-	switch x.(type) {
-	case UserID:
-		if id == x.(UserID) {
-			return true
-		}
-	case *UserID:
-		if x.(*UserID) != nil && id == *x.(*UserID) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (id UserID) IsZero() bool {
-	return id.String() == "" || id == UserIDNil
-}
-
-type RequestID uuid.UUID
 
 var RequestIDNil = RequestID(uuid.Nil)
 
-func NewRequestID() RequestID {
-	return RequestID(uuid.New())
-}
+type RequestID uuid.UUID
 
-func (id RequestID) String() string {
-	return uuid.UUID(id).String()
-}
-
-func (id RequestID) MarshalText() ([]byte, error) {
-	return []byte(uuid.UUID(id).String()), nil
-}
-
-func (id *RequestID) UnmarshalText(text []byte) error {
-	if id == nil {
-		return ErrEntityIsNil
+func NewRequestID() RequestID                        { return RequestID(uuid.New()) }
+func (t RequestID) String() string                   { return uuid.UUID(t).String() }
+func (t RequestID) Value() (driver.Value, error)     { return t.String(), nil }
+func (t *RequestID) Scan(src any) error              { return (*uuid.UUID)(t).Scan(src) }
+func (t RequestID) MarshalText() ([]byte, error)     { return uuid.UUID(t).MarshalText() }
+func (t *RequestID) UnmarshalText(data []byte) error { return (*uuid.UUID)(t).UnmarshalText(data) }
+func (t RequestID) IsZero() bool                     { return t == RequestIDNil }
+func (t RequestID) Matches(x any) bool {
+	v, ok := x.(RequestID)
+	if !ok {
+		return false
 	}
-
-	val, err := uuid.ParseBytes(text)
-	if err != nil {
-		return err
+	return t.String() == v.String()
+}
+func (t RequestID) Validate() error {
+	if t.IsZero() {
+		return errors.New("zero RequestID")
 	}
-
-	*id = RequestID(val)
-
 	return nil
 }
 
-func (id RequestID) Value() (driver.Value, error) {
-	return uuid.UUID(id).Value()
+var UserIDNil = UserID(uuid.Nil)
+
+type UserID uuid.UUID
+
+func NewUserID() UserID                           { return UserID(uuid.New()) }
+func (t UserID) String() string                   { return uuid.UUID(t).String() }
+func (t UserID) Value() (driver.Value, error)     { return t.String(), nil }
+func (t *UserID) Scan(src any) error              { return (*uuid.UUID)(t).Scan(src) }
+func (t UserID) MarshalText() ([]byte, error)     { return uuid.UUID(t).MarshalText() }
+func (t *UserID) UnmarshalText(data []byte) error { return (*uuid.UUID)(t).UnmarshalText(data) }
+func (t UserID) IsZero() bool                     { return t == UserIDNil }
+func (t UserID) Matches(x any) bool {
+	v, ok := x.(UserID)
+	if !ok {
+		return false
+	}
+	return t.String() == v.String()
 }
-
-func (id *RequestID) Scan(src any) error {
-	if id == nil {
-		return ErrEntityIsNil
+func (t UserID) Validate() error {
+	if t.IsZero() {
+		return errors.New("zero UserID")
 	}
-
-	val := uuid.Nil
-
-	if err := val.Scan(src); err != nil {
-		return err
-	}
-
-	*id = RequestID(val)
-
 	return nil
 }
 
-func (id RequestID) Validate() error {
-	if id.IsZero() {
-		return ErrZeroID
-	}
-
-	_, err := uuid.Parse(id.String())
-
-	return err
+type TypeSet = interface {
+	ChatID | MessageID | ProblemID | RequestID | UserID
 }
 
-func (id RequestID) Matches(x any) bool {
-	switch x.(type) {
-	case RequestID:
-		if id == x.(RequestID) {
-			return true
-		}
-	case *RequestID:
-		if x.(*RequestID) != nil && id == *x.(*RequestID) {
-			return true
-		}
-	}
-
-	return false
+func Parse[T TypeSet](s string) (T, error) {
+	v, err := uuid.Parse(s)
+	return T(v), err
 }
 
-func (id RequestID) IsZero() bool {
-	return id.String() == "" || id == RequestIDNil
+func MustParse[T TypeSet](s string) T {
+	return T(uuid.MustParse(s))
 }
