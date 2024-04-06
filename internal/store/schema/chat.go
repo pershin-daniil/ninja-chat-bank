@@ -19,7 +19,7 @@ type Chat struct {
 func (Chat) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", types.ChatID{}).Default(types.NewChatID).Unique().Immutable(),
-		field.UUID("client_id", types.UserID{}).Unique(),
+		field.UUID("client_id", types.UserID{}).Unique().Immutable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 	}
 }
