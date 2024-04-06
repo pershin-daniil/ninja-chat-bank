@@ -6,7 +6,7 @@ silent: true
 vars:
   GO_MODULE: github.com/pershin-daniil/ninja-chat-bank
   GO_FILES:
-    sh: find . -type f -name '*.go' -not -path "./vendor/*" -not -path "*.gen.go" | tr "\n" " "
+    sh: find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./internal/store/*" -not -path "*.gen.go" | tr "\n" " "
 
   GOLANGCI_LINT_VERSION: v1.56.2
   GOLANGCI_LINT_CACHE:
@@ -16,9 +16,37 @@ vars:
     sh: echo "`pwd`/bin/tools"
 
   DEV_TOOLS: |
+    entgo.io/ent/cmd/ent@v0.13.1
     github.com/daixiang0/gci@v0.13.1
+    github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.1.0
     github.com/kazhuravlev/options-gen/cmd/options-gen@v0.32.0
+    go.uber.org/mock/mockgen@v0.4.0
     mvdan.cc/gofumpt@v0.6.0
+
+
+  DOCKER_COMPOSE_PATHS: |
+    ./deploy/local/docker-compose.yml
+    ./deploy/local/docker-compose.sentry.yml
+    ./deploy/local/docker-compose.swagger-ui.yml
+
+  DOCKER_COMPOSE_CMD: docker compose -f {{ .DOCKER_COMPOSE_PATHS | trim | splitLines | join " -f " }}
+
+  TYPES: |
+    ChatID
+    MessageID
+    ProblemID
+    RequestID
+    UserID
+  TYPES_PKG: types
+  TYPES_DST: ./internal/types/types.gen.go
+
+  ENT_SCHEMA: ./internal/store/schema
+
+  KEYCLOAK_REALM_PATH: ./deploy/local/ban-realm.json
+
+  CLIENT_V1_PKG: clientv1
+  CLIENT_V1_SRC: ./api/client.v1.swagger.yml
+  CLIENT_V1_DST: ./internal/server-client/v1/server.gen.go
 
 tasks:
   default:
@@ -66,6 +94,25 @@ tasks:
       - echo "- Tests"
       - go test -race ./...
 
+  tests:integration:
+    env:
+      TEST_LOG_LEVEL: info
+      TEST_KEYCLOAK_REALM: Bank
+      TEST_KEYCLOAK_CLIENT_ID: integration-testing
+      TEST_KEYCLOAK_CLIENT_SECRET: biq7WcbKHgVaalqZDlhqINEi1yGK6aOw
+      TEST_KEYCLOAK_TEST_USER: integration_testing
+      TEST_KEYCLOAK_TEST_PASSWORD: integration_testing
+    cmds:
+      - echo "- Integration tests"
+      - go test -tags integration -count 1 -race ./...
+
+  kc:export:
+    cmds:
+      - echo "- Exporting realm"
+      - "{{.DOCKER_COMPOSE_CMD}} exec keycloak /opt/keycloak/bin/kc.sh export \
+          --realm Bank \
+          --file /dev/stdout > ./deploy/local/keycloak-bank-realm.json"
+
   build:
     cmds:
       - echo "- Build"
@@ -85,3 +132,67 @@ tasks:
   generate:
     - echo "- Run go generate..."
     - export PATH="${PATH}:{{.TOOLS_DIR}}" && go generate ./...
+    - task: gen:types
+    - task: ent:gen
+    - task: gen:api
+
+  gen:types:
+    cmds:
+      - echo "- Generate types..."
+      - go run ./cmd/gen-types {{.TYPES_PKG}} {{ .TYPES | trim | splitLines | join "," }} {{.TYPES_DST}}
+
+  ent:new:
+    cmds:
+      - go run -mod=mod entgo.io/ent/cmd/ent new --target {{.ENT_SCHEMA}} {{$.CLI_ARGS}}
+      - task: tidy
+
+  ent:gen:
+    cmds:
+      - go run -mod=mod entgo.io/ent/cmd/ent generate {{.ENT_SCHEMA}}
+      - task: tidy
+
+  gen:api:
+    dir: "{{.TOOLS_DIR}}"
+    cmds:
+      - ./oapi-codegen -old-config-style -package {{.CLIENT_V1_PKG }} ../../{{.CLIENT_V1_SRC}} > ../../{{.CLIENT_V1_DST}}
+
+  deps:
+    cmds:
+      - echo "- Run deps containers"
+      - "{{.DOCKER_COMPOSE_CMD}} up -d"
+
+  deps:cmd:
+    cmds:
+      - "{{.DOCKER_COMPOSE_CMD}} {{.CLI_ARGS}}"
+
+  deps:status:
+    cmds:
+      - "{{.DOCKER_COMPOSE_CMD}} ps"
+
+  deps:logs:
+    cmds:
+      - "{{.DOCKER_COMPOSE_CMD}} logs {{.CLI_ARGS}}"
+
+  deps:stop:
+    cmds:
+      - echo "- Stop deps containers"
+      - "{{.DOCKER_COMPOSE_CMD}} stop"
+
+  deps:reset-psql:
+    cmds:
+      - task: deps:reset
+        vars:
+          SERVICE: postgres
+
+  deps:reset-sentry:
+    cmds:
+      - task: deps:reset
+        vars:
+          SERVICE: sentry sentry-worker cron redis
+
+  deps:reset:
+    internal: true
+    cmds:
+      - "{{.DOCKER_COMPOSE_CMD}} rm -fsv {{.SERVICE}}"
+      - "{{.DOCKER_COMPOSE_CMD}} up -d {{.SERVICE}}"
+

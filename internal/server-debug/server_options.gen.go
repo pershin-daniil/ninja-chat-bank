@@ -4,6 +4,7 @@ package serverdebug
 import (
 	fmt461e464ebed9 "fmt"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	errors461e464ebed9 "github.com/kazhuravlev/options-gen/pkg/errors"
 	validator461e464ebed9 "github.com/kazhuravlev/options-gen/pkg/validator"
 )
@@ -12,6 +13,7 @@ type OptOptionsSetter func(o *Options)
 
 func NewOptions(
 	addr string,
+	v1Swagger *openapi3.T,
 	options ...OptOptionsSetter,
 ) Options {
 	o := Options{}
@@ -19,6 +21,7 @@ func NewOptions(
 	// Setting defaults from field tag (if present)
 
 	o.addr = addr
+	o.v1Swagger = v1Swagger
 
 	for _, opt := range options {
 		opt(&o)
@@ -29,12 +32,20 @@ func NewOptions(
 func (o *Options) Validate() error {
 	errs := new(errors461e464ebed9.ValidationErrors)
 	errs.Add(errors461e464ebed9.NewValidationError("addr", _validate_Options_addr(o)))
+	errs.Add(errors461e464ebed9.NewValidationError("v1Swagger", _validate_Options_v1Swagger(o)))
 	return errs.AsError()
 }
 
 func _validate_Options_addr(o *Options) error {
 	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.addr, "required,hostname_port"); err != nil {
 		return fmt461e464ebed9.Errorf("field `addr` did not pass the test: %w", err)
+	}
+	return nil
+}
+
+func _validate_Options_v1Swagger(o *Options) error {
+	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.v1Swagger, "required"); err != nil {
+		return fmt461e464ebed9.Errorf("field `v1Swagger` did not pass the test: %w", err)
 	}
 	return nil
 }

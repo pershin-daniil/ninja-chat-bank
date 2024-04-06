@@ -31,9 +31,9 @@ func (i *indexPage) handler(eCtx echo.Context) error {
 <body>
 	<h2>Chat Service Debug</h2>
 	<ul>
-		{{ range $page := .Pages }}
-		<li><a href="{{ $page.Path }}">{{ $page.Path }}</a> {{ $page.Description }}</li>
-		{{ end }}
+	{{- range $, $p := .Pages }}
+		<li><a href="{{ $p.Path }}">{{ $p.Path }}</a>&nbsp;&nbsp;{{ $p.Description }}</li>
+	{{- end }}
 	</ul>
 
 	<h2>Log Level</h2>
@@ -52,6 +52,7 @@ func (i *indexPage) handler(eCtx echo.Context) error {
 			const req = new XMLHttpRequest();
 			req.open('PUT', '/log/level', false);
 			req.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+			req.setRequestHeader('Accept', 'application/json');
 			req.onload = function() { window.location.reload(); };
 			req.send('level='+document.getElementById('log-level-select').value);
 		};
