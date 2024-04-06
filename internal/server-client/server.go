@@ -10,7 +10,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	echomdlwr "github.com/labstack/echo/v4/middleware"
 	oapimdlwr "github.com/oapi-codegen/echo-middleware"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -49,41 +49,14 @@ func New(opts Options) (*Server, error) {
 
 	e := echo.New()
 	e.Use(
-		middleware.Recover(),
-		middleware.BodyLimit(bodyLimit),
-		middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-			LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-				if c.Request().Method == http.MethodOptions {
-					return nil
-				}
-				opts.logger.Info("request",
-					zap.Duration("latency", v.Latency),
-					zap.String("remote_ip", v.RemoteIP),
-					zap.String("host", v.Host),
-					zap.String("method", v.Method),
-					zap.String("path", v.RoutePath),
-					zap.String("request_id", v.RequestID),
-					zap.String("user_agent", v.UserAgent),
-					zap.Int("status", v.Status),
-					zap.String("user_id", middlewares.MustUserID(c).String()),
-				)
-				return nil
-			},
-			LogLatency:   true,
-			LogRemoteIP:  true,
-			LogHost:      true,
-			LogMethod:    true,
-			LogRoutePath: true,
-			LogRequestID: true,
-			LogUserAgent: true,
-			LogStatus:    true,
-			LogError:     true,
-		}),
-		middleware.CORSWithConfig(middleware.CORSConfig{
+		middlewares.NewRequestLogger(opts.logger),
+		middlewares.NewRecovery(opts.logger),
+		echomdlwr.CORSWithConfig(echomdlwr.CORSConfig{
 			AllowOrigins: opts.allowOrigins,
 			AllowMethods: []string{http.MethodPost},
 		}),
 		middlewares.NewKeycloakTokenAuth(opts.introspector, opts.resource, opts.role),
+		echomdlwr.BodyLimit(bodyLimit),
 	)
 
 	v1 := e.Group("v1", oapimdlwr.OapiRequestValidatorWithOptions(opts.v1Swagger, &oapimdlwr.Options{
@@ -96,16 +69,14 @@ func New(opts Options) (*Server, error) {
 
 	clientv1.RegisterHandlers(v1, opts.v1Handlers)
 
-	s := Server{
+	return &Server{
 		lg: opts.logger,
 		srv: &http.Server{
 			Addr:              opts.addr,
 			Handler:           e,
 			ReadHeaderTimeout: readHeaderTimeout,
 		},
-	}
-
-	return &s, nil
+	}, nil
 }
 
 func (s *Server) Run(ctx context.Context) error {

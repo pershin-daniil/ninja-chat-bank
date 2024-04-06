@@ -16,6 +16,7 @@ import (
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/buildinfo"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/logger"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/middlewares"
 )
 
 const (
@@ -43,7 +44,10 @@ func New(opts Options) (*Server, error) {
 	lg := zap.L().Named("server-debug")
 
 	e := echo.New()
-	e.Use(middleware.Recover())
+	e.Use(
+		middleware.Recover(),
+		middlewares.NewRequestLogger(lg),
+	)
 
 	s := &Server{
 		lg: lg,

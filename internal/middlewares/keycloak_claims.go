@@ -29,12 +29,12 @@ func (c claims) Valid() error {
 		return err
 	}
 
-	if c.UserID().IsZero() {
-		return ErrSubjectNotDefined
-	}
-
 	if len(c.ResourceAccess) == 0 {
 		return ErrNoAllowedResources
+	}
+
+	if c.UserID().IsZero() {
+		return ErrSubjectNotDefined
 	}
 
 	return nil
