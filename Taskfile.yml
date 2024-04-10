@@ -41,6 +41,7 @@ vars:
   TYPES_DST: ./internal/types/types.gen.go
 
   ENT_SCHEMA: ./internal/store/schema
+  ENT_DIR: ./internal/store/ent-gen
 
   KEYCLOAK_REALM_PATH: ./deploy/local/ban-realm.json
 
@@ -148,7 +149,7 @@ tasks:
 
   ent:gen:
     cmds:
-      - go run -mod=mod entgo.io/ent/cmd/ent generate {{.ENT_SCHEMA}}
+      - go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/upsert,sql/lock --template ./internal/store/templates/ {{.ENT_SCHEMA}}
       - task: tidy
 
   gen:api:
