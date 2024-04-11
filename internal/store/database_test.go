@@ -5,12 +5,13 @@ package store_test
 import (
 	"context"
 	"fmt"
-	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
-	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 	"testing"
 
-	"github.com/pershin-daniil/ninja-chat-bank/internal/testingh"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/testingh"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 )
 
 type StoreSuite struct {
@@ -146,7 +147,7 @@ func (s *StoreSuite) TestNoNestedTransactions() {
 
 	err = s.Database.RunInTx(ctx, func(ctx context.Context) error {
 		tx2 := store.TxFromContext(ctx)
-		s.True(tx == tx2, "we should reuse existing transaction") // The same pointers.
+		s.Equalf(tx, tx2, "we should reuse existing transaction") // The same pointers.
 		return nil
 	})
 	s.Require().NoError(err)

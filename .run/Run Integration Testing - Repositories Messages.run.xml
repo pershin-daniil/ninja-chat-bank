@@ -1,10 +1,11 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Run Integration Testing" type="GoTestRunConfiguration" factoryName="Go Test">
+  <configuration default="false" name="Run Integration Testing - Repositories Messages" type="GoTestRunConfiguration" factoryName="Go Test">
     <module name="ninja-chat-bank" />
     <working_directory value="$PROJECT_DIR$" />
     <go_parameters value="-tags integration" />
     <useCustomBuildTags value="true" />
     <envs>
+      <env name="PSQL_PASSWORD" value="chat-service" />
       <env name="PSQL_USER" value="chat-service" />
       <env name="TEST_KEYCLOAK_CLIENT_ID" value="integration-testing" />
       <env name="TEST_KEYCLOAK_CLIENT_SECRET" value="biq7WcbKHgVaalqZDlhqINEi1yGK6aOw" />
@@ -12,10 +13,10 @@
       <env name="TEST_KEYCLOAK_TEST_PASSWORD" value="test" />
       <env name="TEST_KEYCLOAK_TEST_USER" value="test" />
       <env name="TEST_LOG_LEVEL" value="info" />
-      <env name="PSQL_PASSWORD" value="chat-service" />
+      <env name="TEST_PSQL_DEBUG" value="true" />
     </envs>
-    <kind value="DIRECTORY" />
-    <package value="github.com/pershin-daniil/ninja-chat-bank" />
+    <kind value="PACKAGE" />
+    <package value="github.com/pershin-daniil/ninja-chat-bank/internal/repositories/messages" />
     <directory value="$PROJECT_DIR$" />
     <filePath value="$PROJECT_DIR$" />
     <framework value="gotest" />

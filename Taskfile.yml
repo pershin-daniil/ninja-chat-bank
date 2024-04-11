@@ -103,6 +103,9 @@ tasks:
       TEST_KEYCLOAK_CLIENT_SECRET: biq7WcbKHgVaalqZDlhqINEi1yGK6aOw
       TEST_KEYCLOAK_TEST_USER: integration_testing
       TEST_KEYCLOAK_TEST_PASSWORD: integration_testing
+      PSQL_PASSWORD: chat-service
+      PSQL_USER: chat-service
+      TEST_PSQL_DEBUG: true
     cmds:
       - echo "- Integration tests"
       - go test -tags integration -count 1 -race ./...
