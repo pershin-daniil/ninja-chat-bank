@@ -4,7 +4,6 @@ package store
 import (
 	fmt461e464ebed9 "fmt"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
 	errors461e464ebed9 "github.com/kazhuravlev/options-gen/pkg/errors"
 	validator461e464ebed9 "github.com/kazhuravlev/options-gen/pkg/validator"
 )
