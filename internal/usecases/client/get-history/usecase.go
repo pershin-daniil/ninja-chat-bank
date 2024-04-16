@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/pershin-daniil/ninja-chat-bank/internal/cursor"
 
+	"github.com/pershin-daniil/ninja-chat-bank/internal/cursor"
 	messagesrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/messages"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 )
