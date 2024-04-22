@@ -200,3 +200,8 @@ tasks:
       - "{{.DOCKER_COMPOSE_CMD}} rm -fsv {{.SERVICE}}"
       - "{{.DOCKER_COMPOSE_CMD}} up -d {{.SERVICE}}"
 
+  deps:all:
+    cmds:
+      - task: deps
+      - COMPOSE_PROFILES=sentry task deps
+      - COMPOSE_PROFILES=swager-ui task deps

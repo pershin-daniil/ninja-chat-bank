@@ -4,6 +4,7 @@ package store
 import (
 	fmt461e464ebed9 "fmt"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	errors461e464ebed9 "github.com/kazhuravlev/options-gen/pkg/errors"
 	validator461e464ebed9 "github.com/kazhuravlev/options-gen/pkg/validator"
 )
@@ -15,6 +16,7 @@ func NewPSQLOptions(
 	username string,
 	password string,
 	database string,
+	production bool,
 	options ...OptPSQLOptionsSetter,
 ) PSQLOptions {
 	o := PSQLOptions{}
@@ -25,6 +27,7 @@ func NewPSQLOptions(
 	o.username = username
 	o.password = password
 	o.database = database
+	o.production = production
 
 	for _, opt := range options {
 		opt(&o)
@@ -32,9 +35,9 @@ func NewPSQLOptions(
 	return o
 }
 
-func WithDebug(opt bool) OptPSQLOptionsSetter {
+func WithDebugMode(opt bool) OptPSQLOptionsSetter {
 	return func(o *PSQLOptions) {
-		o.debug = opt
+		o.debugMode = opt
 	}
 }
 

@@ -35,7 +35,8 @@ func PrepareDB(ctx context.Context, t *testing.T, dbName string) (st *store.Clie
 		Config.PostgresUser,
 		Config.PostgresPassword,
 		dbName,
-		store.WithDebug(Config.PostgresDebug),
+		false,
+		store.WithDebugMode(Config.PostgresDebug),
 	))
 	require.NoError(t, err)
 

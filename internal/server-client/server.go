@@ -34,7 +34,8 @@ type Options struct {
 	v1Handlers   clientv1.ServerInterface `option:"mandatory" validate:"required"`
 	introspector middlewares.Introspector `option:"mandatory" validate:"required"`
 	resource     string                   `option:"mandatory" validate:"required"`
-	role         string                   `option:"mandatory" validat:"required"`
+	role         string                   `option:"mandatory" validate:"required"`
+	errHandler   echo.HTTPErrorHandler    `option:"mandatory" validate:"required"`
 }
 
 type Server struct {
@@ -48,6 +49,7 @@ func New(opts Options) (*Server, error) {
 	}
 
 	e := echo.New()
+	e.HTTPErrorHandler = opts.errHandler
 	e.Use(
 		middlewares.NewRequestLogger(opts.logger),
 		middlewares.NewRecovery(opts.logger),

@@ -9,14 +9,15 @@ import (
 	"os/signal"
 	"syscall"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"golang.org/x/sync/errgroup"
 
 	keycloakclient "github.com/pershin-daniil/ninja-chat-bank/internal/clients/keycloak"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/config"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/logger"
+	messagesrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/messages"
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
 	serverdebug "github.com/pershin-daniil/ninja-chat-bank/internal/server-debug"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
 )
 
 var configPath = flag.String("config", "configs/config.toml", "Path to config file")
@@ -69,13 +70,38 @@ func run() (errReturned error) {
 		return fmt.Errorf("init keycloak client: %w", err)
 	}
 
+	psqlClient, err := store.NewPSQLClient(store.NewPSQLOptions(
+		cfg.DB.Postgres.Addr,
+		cfg.DB.Postgres.User,
+		cfg.DB.Postgres.Password,
+		cfg.DB.Postgres.Database,
+		cfg.IsProduction(),
+		store.WithDebugMode(cfg.DB.Postgres.DebugMode),
+	))
+	if err != nil {
+		return fmt.Errorf("failed to init psql client: %v", err)
+	}
+
+	if err = psqlClient.Schema.Create(ctx); err != nil {
+		return fmt.Errorf("failed to init schema: %v", err)
+	}
+
+	db := store.NewDatabase(psqlClient)
+
+	msgRepo, err := messagesrepo.New(messagesrepo.NewOptions(db))
+	if err != nil {
+		return fmt.Errorf("failed to init message repo: %v", err)
+	}
+
 	srvClient, err := initServerClient(
+		cfg.IsProduction(),
 		cfg.Servers.Client.Addr,
 		cfg.Servers.Client.AllowOrigins,
 		swagger,
 		kcClient,
 		cfg.Servers.Client.RequiredAccess.Resource,
 		cfg.Servers.Client.RequiredAccess.Role,
+		msgRepo,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to init server: %v", err)
