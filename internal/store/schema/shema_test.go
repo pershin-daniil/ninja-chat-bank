@@ -51,6 +51,7 @@ func TestChatServiceSchema(t *testing.T) {
 		// Dialog 1.
 		client.Message.
 			Create().
+			SetInitialRequestID(types.NewRequestID()).
 			SetChatID(chat.ID).
 			SetProblemID(problems[0].ID).
 			SetAuthorID(clientID).
@@ -62,6 +63,7 @@ func TestChatServiceSchema(t *testing.T) {
 
 		client.Message.
 			Create().
+			SetInitialRequestID(types.NewRequestID()).
 			SetChatID(chat.ID).
 			SetProblemID(problems[0].ID).
 			SetAuthorID(managerID).
@@ -74,6 +76,7 @@ func TestChatServiceSchema(t *testing.T) {
 		// Dialog 2.
 		client.Message.
 			Create().
+			SetInitialRequestID(types.NewRequestID()).
 			SetChatID(chat.ID).
 			SetProblemID(problems[1].ID).
 			SetAuthorID(clientID).
@@ -85,6 +88,7 @@ func TestChatServiceSchema(t *testing.T) {
 
 		client.Message.
 			Create().
+			SetInitialRequestID(types.NewRequestID()).
 			SetChatID(chat.ID).
 			SetProblemID(problems[1].ID).
 			SetAuthorID(managerID).

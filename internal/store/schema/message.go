@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 )
@@ -22,6 +23,7 @@ func (Message) Fields() []ent.Field {
 		field.UUID("author_id", types.UserID{}).Optional(),
 		field.UUID("chat_id", types.ChatID{}),
 		field.UUID("problem_id", types.ProblemID{}),
+		field.UUID("initial_request_id", types.RequestID{}).Default(types.NewRequestID).Unique().Immutable(),
 		field.Bool("is_visible_for_client").Default(false),
 		field.Bool("is_visible_for_manager").Default(false),
 		field.Text("body").NotEmpty().Immutable(),
@@ -37,5 +39,12 @@ func (Message) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.From("problem", Problem.Type).Ref("messages").Unique().Required().Field("problem_id"),
 		edge.From("chat", Chat.Type).Ref("messages").Unique().Required().Field("chat_id"),
+	}
+}
+
+func (Message) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("chat_id"),
+		index.Fields("created_at", "is_visible_for_client"),
 	}
 }

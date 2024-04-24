@@ -8,6 +8,25 @@ servers:
     description: Development server
 
 paths:
+  /sendMessage:
+    post:
+      description: Send new message to the chat.
+      parameters:
+        - $ref: "#/components/parameters/XRequestIDHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        '200':
+          description: Message created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendMessageResponse"
+
   /getHistory:
     post:
       description: Get chat history.
@@ -65,8 +84,48 @@ components:
     ErrorCode:
       type: integer
       description: contains HTTP error codes and specific business logic error codes (the last must be >= 1000).
-      # TODO: Конкретные коды появятся в следующем уроке.
+      enum:
+        - 1000
+        - 1001
+      x-enum-varnames:
+        - ErrorCodeCreateChatError
+        - ErrorCodeCreateProblemError
       minimum: 400
+
+    SendMessageRequest:
+      required: [ messageBody]
+      properties:
+        messageBody:
+          type: string
+          minimum: 1
+          maximum: 3000
+
+    SendMessageResponse:
+      properties:
+        data:
+          $ref: "#/components/schemas/MessageHeader"
+        error:
+          $ref: "#/components/schemas/Error"
+
+    MessageHeader:
+      required: [ id, createdAt ]
+      properties:
+        id:
+          type: string
+          format: uuid
+          x-go-type: types.MessageID
+          x-go-type-import:
+            path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+        authorId:
+          type: string
+          format: uuid
+          x-go-type: types.UserID
+          x-go-type-import:
+            path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+        createdAt:
+          type: string
+          format: 'date-time'
+
 
     # /getHistory
 
@@ -87,34 +146,24 @@ components:
           $ref: "#/components/schemas/Error"
 
     MessagesPage:
-      required: [ messages, next ]
+      required: [ next, messages ]
       properties:
-        messages:
-          type: array
-          items:
-            $ref: "#/components/schemas/Message"
         next:
           type: string
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/Message" }
 
     Message:
-      required: [ id, body, createdAt, isReceived, isBlocked, isService ]
-      properties:
-        id:
-          type: string
-          format: uuid
-          x-go-type: types.MessageID
-        authorId:
-          type: string
-          format: uuid
-          x-go-type: types.UserID
-        body:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-        isReceived:
-          type: boolean
-        isBlocked:
-          type: boolean
-        isService:
-          type: boolean
+      allOf:
+        - $ref: "#/components/schemas/MessageHeader"
+        - required: [ body, isReceived, isBlocked, isService ]
+          properties:
+            body:
+              type: string
+            isReceived:
+              type: boolean
+            isBlocked:
+              type: boolean
+            isService:
+              type: boolean

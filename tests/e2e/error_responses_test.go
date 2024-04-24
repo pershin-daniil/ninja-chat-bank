@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"strings"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 	apiclientv1 "github.com/pershin-daniil/ninja-chat-bank/tests/e2e/api/client/v1"
 )

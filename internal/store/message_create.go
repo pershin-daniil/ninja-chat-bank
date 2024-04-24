@@ -52,6 +52,20 @@ func (mc *MessageCreate) SetProblemID(ti types.ProblemID) *MessageCreate {
 	return mc
 }
 
+// SetInitialRequestID sets the "initial_request_id" field.
+func (mc *MessageCreate) SetInitialRequestID(ti types.RequestID) *MessageCreate {
+	mc.mutation.SetInitialRequestID(ti)
+	return mc
+}
+
+// SetNillableInitialRequestID sets the "initial_request_id" field if the given value is not nil.
+func (mc *MessageCreate) SetNillableInitialRequestID(ti *types.RequestID) *MessageCreate {
+	if ti != nil {
+		mc.SetInitialRequestID(*ti)
+	}
+	return mc
+}
+
 // SetIsVisibleForClient sets the "is_visible_for_client" field.
 func (mc *MessageCreate) SetIsVisibleForClient(b bool) *MessageCreate {
 	mc.mutation.SetIsVisibleForClient(b)
@@ -201,6 +215,10 @@ func (mc *MessageCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (mc *MessageCreate) defaults() {
+	if _, ok := mc.mutation.InitialRequestID(); !ok {
+		v := message.DefaultInitialRequestID()
+		mc.mutation.SetInitialRequestID(v)
+	}
 	if _, ok := mc.mutation.IsVisibleForClient(); !ok {
 		v := message.DefaultIsVisibleForClient
 		mc.mutation.SetIsVisibleForClient(v)
@@ -248,6 +266,14 @@ func (mc *MessageCreate) check() error {
 	if v, ok := mc.mutation.ProblemID(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "problem_id", err: fmt.Errorf(`store: validator failed for field "Message.problem_id": %w`, err)}
+		}
+	}
+	if _, ok := mc.mutation.InitialRequestID(); !ok {
+		return &ValidationError{Name: "initial_request_id", err: errors.New(`store: missing required field "Message.initial_request_id"`)}
+	}
+	if v, ok := mc.mutation.InitialRequestID(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "initial_request_id", err: fmt.Errorf(`store: validator failed for field "Message.initial_request_id": %w`, err)}
 		}
 	}
 	if _, ok := mc.mutation.IsVisibleForClient(); !ok {
@@ -323,6 +349,10 @@ func (mc *MessageCreate) createSpec() (*Message, *sqlgraph.CreateSpec) {
 	if value, ok := mc.mutation.AuthorID(); ok {
 		_spec.SetField(message.FieldAuthorID, field.TypeUUID, value)
 		_node.AuthorID = value
+	}
+	if value, ok := mc.mutation.InitialRequestID(); ok {
+		_spec.SetField(message.FieldInitialRequestID, field.TypeUUID, value)
+		_node.InitialRequestID = value
 	}
 	if value, ok := mc.mutation.IsVisibleForClient(); ok {
 		_spec.SetField(message.FieldIsVisibleForClient, field.TypeBool, value)
@@ -562,6 +592,9 @@ func (u *MessageUpsertOne) UpdateNewValues() *MessageUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
 		if _, exists := u.create.mutation.ID(); exists {
 			s.SetIgnore(message.FieldID)
+		}
+		if _, exists := u.create.mutation.InitialRequestID(); exists {
+			s.SetIgnore(message.FieldInitialRequestID)
 		}
 		if _, exists := u.create.mutation.Body(); exists {
 			s.SetIgnore(message.FieldBody)
@@ -908,6 +941,9 @@ func (u *MessageUpsertBulk) UpdateNewValues() *MessageUpsertBulk {
 		for _, b := range u.create.builders {
 			if _, exists := b.mutation.ID(); exists {
 				s.SetIgnore(message.FieldID)
+			}
+			if _, exists := b.mutation.InitialRequestID(); exists {
+				s.SetIgnore(message.FieldInitialRequestID)
 			}
 			if _, exists := b.mutation.Body(); exists {
 				s.SetIgnore(message.FieldBody)

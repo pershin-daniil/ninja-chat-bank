@@ -84,6 +84,7 @@ func (c *Chat) Messages() []Message {
 
 	result := make([]Message, 0, len(c.messages))
 	for _, m := range c.messages {
+		m.CreatedAt = m.CreatedAt.Truncate(time.Microsecond)
 		result = append(result, *m)
 	}
 	return result

@@ -10,7 +10,7 @@ type Response struct {
 
 var ResponseBuilder = func(code int, msg string, details string) any {
 	e := clientv1.Error{
-		Code:    code,
+		Code:    clientv1.ErrorCode(code),
 		Message: msg,
 	}
 

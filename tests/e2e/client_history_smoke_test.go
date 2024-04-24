@@ -5,6 +5,9 @@ package e2e_test
 import (
 	"context"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 	clientchat "github.com/pershin-daniil/ninja-chat-bank/tests/e2e/client-chat"
 )

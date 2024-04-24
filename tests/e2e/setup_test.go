@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/golang-jwt/jwt"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	keycloakclient "github.com/pershin-daniil/ninja-chat-bank/internal/clients/keycloak"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
@@ -55,6 +57,7 @@ var _ = BeforeSuite(func() {
 		kcRealm,
 		kcClientID,
 		kcClientSecret,
+		false,
 		keycloakclient.WithDebugMode(kcClientDebug),
 	))
 	Expect(err).ShouldNot(HaveOccurred())
