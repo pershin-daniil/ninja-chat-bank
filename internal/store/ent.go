@@ -13,6 +13,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/chat"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/store/failedjob"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/store/job"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/message"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/problem"
 )
@@ -75,9 +77,11 @@ var (
 func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			chat.Table:    chat.ValidColumn,
-			message.Table: message.ValidColumn,
-			problem.Table: problem.ValidColumn,
+			chat.Table:      chat.ValidColumn,
+			failedjob.Table: failedjob.ValidColumn,
+			job.Table:       job.ValidColumn,
+			message.Table:   message.ValidColumn,
+			problem.Table:   problem.ValidColumn,
 		})
 	})
 	return columnCheck(table, column)

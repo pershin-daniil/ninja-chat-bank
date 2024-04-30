@@ -20,6 +20,36 @@ var (
 		Columns:    ChatsColumns,
 		PrimaryKey: []*schema.Column{ChatsColumns[0]},
 	}
+	// FailedJobsColumns holds the columns for the "failed_jobs" table.
+	FailedJobsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID, Unique: true},
+		{Name: "name", Type: field.TypeString, Size: 2147483647},
+		{Name: "payload", Type: field.TypeString, Size: 2147483647},
+		{Name: "reason", Type: field.TypeString, Size: 2147483647},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// FailedJobsTable holds the schema information for the "failed_jobs" table.
+	FailedJobsTable = &schema.Table{
+		Name:       "failed_jobs",
+		Columns:    FailedJobsColumns,
+		PrimaryKey: []*schema.Column{FailedJobsColumns[0]},
+	}
+	// JobsColumns holds the columns for the "jobs" table.
+	JobsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID, Unique: true},
+		{Name: "name", Type: field.TypeString, Size: 2147483647},
+		{Name: "payload", Type: field.TypeString, Size: 2147483647},
+		{Name: "attempts", Type: field.TypeInt, Default: 0},
+		{Name: "available_at", Type: field.TypeTime},
+		{Name: "reserved_until", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// JobsTable holds the schema information for the "jobs" table.
+	JobsTable = &schema.Table{
+		Name:       "jobs",
+		Columns:    JobsColumns,
+		PrimaryKey: []*schema.Column{JobsColumns[0]},
+	}
 	// MessagesColumns holds the columns for the "messages" table.
 	MessagesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID, Unique: true},
@@ -92,6 +122,8 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		ChatsTable,
+		FailedJobsTable,
+		JobsTable,
 		MessagesTable,
 		ProblemsTable,
 	}
