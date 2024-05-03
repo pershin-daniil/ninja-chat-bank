@@ -16,10 +16,14 @@ import (
 	"github.com/pershin-daniil/ninja-chat-bank/internal/config"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/logger"
 	chatsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/chats"
+	jobsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/jobs"
 	messagesrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/messages"
 	problemsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/problems"
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
 	serverdebug "github.com/pershin-daniil/ninja-chat-bank/internal/server-debug"
+	msgproducer "github.com/pershin-daniil/ninja-chat-bank/internal/services/msg-producer"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
+	sendclientmessagejob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/send-client-message"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
 )
 
@@ -111,6 +115,42 @@ func run() (errReturned error) {
 		return fmt.Errorf("failed to init problem repo: %v", err)
 	}
 
+	jobsRepo, err := jobsrepo.New(jobsrepo.NewOptions(db))
+	if err != nil {
+		return fmt.Errorf("failed to init jobs repo: %v", err)
+	}
+
+	outboxService, err := outbox.New(outbox.NewOptions(
+		cfg.Services.OutboxConfig.Workers,
+		cfg.Services.OutboxConfig.IdleTime,
+		cfg.Services.OutboxConfig.ReserveFor,
+		jobsRepo,
+		db,
+	))
+	if err != nil {
+		return fmt.Errorf("failed to init outbox service: %v", err)
+	}
+
+	msgProducer, err := msgproducer.New(msgproducer.NewOptions(
+		msgproducer.NewKafkaWriter(
+			cfg.Services.MsgProducerConfig.Brokers,
+			cfg.Services.MsgProducerConfig.Topic,
+			cfg.Services.MsgProducerConfig.BatchSize,
+		)))
+	if err != nil {
+		return fmt.Errorf("failed to init message producer: %v", err)
+	}
+
+	sendMessageJob, err := sendclientmessagejob.New(sendclientmessagejob.NewOptions(
+		msgProducer,
+		msgRepo,
+	))
+	if err != nil {
+		return fmt.Errorf("failed to init send message job: %v", err)
+	}
+
+	outboxService.MustRegisterJob(sendMessageJob)
+
 	srvClient, err := initServerClient(
 		cfg.IsProduction(),
 		cfg.Servers.Client.Addr,
@@ -122,6 +162,7 @@ func run() (errReturned error) {
 		msgRepo,
 		chatRepo,
 		problemRepo,
+		outboxService,
 		db,
 	)
 	if err != nil {
@@ -133,6 +174,7 @@ func run() (errReturned error) {
 	// Run servers.
 	eg.Go(func() error { return srvDebug.Run(ctx) })
 	eg.Go(func() error { return srvClient.Run(ctx) })
+	eg.Go(func() error { return outboxService.Run(ctx) })
 
 	if err = eg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("failed to wait app stop: %v", err)

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	messagesrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/messages"
+	sendclientmessagejob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/send-client-message"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 )
 
@@ -19,6 +21,10 @@ var (
 
 type chatsRepository interface {
 	CreateIfNotExists(ctx context.Context, userID types.UserID) (types.ChatID, error)
+}
+
+type outboxService interface {
+	Put(ctx context.Context, name string, payload string, availableAt time.Time) (types.JobID, error)
 }
 
 type messagesRepository interface {
@@ -43,10 +49,11 @@ type transactor interface {
 
 //go:generate options-gen -out-filename=sendmessage.gen.go -from-struct=Options
 type Options struct {
-	chatRepo    chatsRepository    `option:"mandatory" validate:"required"`
-	msgRepo     messagesRepository `option:"mandatory" validate:"required"`
-	problemRepo problemsRepository `option:"mandatory" validate:"required"`
-	tx          transactor         `option:"mandatory" validate:"required"`
+	chatRepo      chatsRepository    `option:"mandatory" validate:"required"`
+	msgRepo       messagesRepository `option:"mandatory" validate:"required"`
+	outboxService outboxService      `option:"mandatory" validate:"required"`
+	problemRepo   problemsRepository `option:"mandatory" validate:"required"`
+	tx            transactor         `option:"mandatory" validate:"required"`
 }
 
 type UseCase struct {
@@ -86,6 +93,10 @@ func (u UseCase) Handle(ctx context.Context, req Request) (Response, error) {
 		msg, err = u.msgRepo.CreateClientVisible(ctx, req.ID, problemID, chatID, req.ClientID, req.MessageBody)
 		if err != nil {
 			return fmt.Errorf("failed to create msg: %v", err)
+		}
+
+		if _, err = u.outboxService.Put(ctx, sendclientmessagejob.Name, msg.ID.String(), time.Now()); err != nil {
+			return fmt.Errorf("failed to put message: %v", err)
 		}
 
 		return nil

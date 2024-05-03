@@ -34,3 +34,15 @@ password = "chat-service"
 addr = "localhost:5432"
 database = "postgres"
 debug_mode = true
+
+[services]
+[services.msg_producer]
+brokers = ["localhost:9092"]
+topic = "chat.messages"
+batch_size = 1
+encrypt_key = "" # Leave it blank to disable encryption.
+
+[services.outbox]
+workers = 2
+idle_time = "1s"
+reserve_for = "5m"

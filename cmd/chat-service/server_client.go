@@ -13,6 +13,7 @@ import (
 	serverclient "github.com/pershin-daniil/ninja-chat-bank/internal/server-client"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server-client/errhandler"
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
 	gethistory "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/client/get-history"
 	sendmessage "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/client/send-message"
@@ -34,6 +35,8 @@ func initServerClient( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/f
 	chatRepo *chatsrepo.Repo,
 	problemRepo *problemsrepo.Repo,
 
+	outboxService *outbox.Service,
+
 	db *store.Database,
 ) (*serverclient.Server, error) {
 	lg := zap.L().Named(nameServerClient)
@@ -43,7 +46,7 @@ func initServerClient( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/f
 		return nil, fmt.Errorf("failed to create getHistoryUsrCase: %v", err)
 	}
 
-	sendMessageUseCase, err := sendmessage.New(sendmessage.NewOptions(chatRepo, msgRepo, problemRepo, db))
+	sendMessageUseCase, err := sendmessage.New(sendmessage.NewOptions(chatRepo, msgRepo, outboxService, problemRepo, db))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sendMessageUseCase: %v", err)
 	}

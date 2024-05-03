@@ -95,7 +95,7 @@ func (s *Service) Run(ctx context.Context) error {
 						return err
 					}
 
-					lg.Warn("execute error: %v", zap.Error(err))
+					lg.Warn("execute error", zap.Error(err))
 					return err
 				}
 

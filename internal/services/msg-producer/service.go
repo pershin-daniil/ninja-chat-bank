@@ -57,7 +57,7 @@ func New(opts Options) (*Service, error) {
 			return nil, fmt.Errorf("failde to encrypt NewGCM: %v", err)
 		}
 	} else {
-		zap.L().Named(serviceName).Info("encryptKey is empty")
+		zap.L().Named(serviceName).Info("encryption disabled")
 	}
 
 	return &Service{
