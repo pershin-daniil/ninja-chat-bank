@@ -3,9 +3,10 @@ package inmemmanagerpool
 import (
 	"context"
 	"errors"
+	"sync"
+
 	managerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
-	"sync"
 )
 
 const (
@@ -52,7 +53,7 @@ func (s *Service) Get(_ context.Context) (types.UserID, error) {
 	return manager, nil
 }
 
-func (s *Service) Put(ctx context.Context, managerID types.UserID) error {
+func (s *Service) Put(_ context.Context, managerID types.UserID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
