@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	managerv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/v1"
 	"log"
 	"os/signal"
 	"syscall"
@@ -55,12 +56,17 @@ func run() (errReturned error) {
 	}
 	defer logger.Sync()
 
-	swagger, err := clientv1.GetSwagger()
+	clientSwagger, err := clientv1.GetSwagger()
 	if err != nil {
-		return fmt.Errorf("failed to get swagger: %v", err)
+		return fmt.Errorf("failed to get client swagger: %v", err)
 	}
 
-	srvDebug, err := serverdebug.New(serverdebug.NewOptions(cfg.Servers.Debug.Addr, swagger))
+	managerSwagger, err := managerv1.GetSwagger()
+	if err != nil {
+		return fmt.Errorf("failed to get client swagger: %v", err)
+	}
+
+	srvDebug, err := serverdebug.New(serverdebug.NewOptions(cfg.Servers.Debug.Addr, clientSwagger, managerSwagger))
 	if err != nil {
 		return fmt.Errorf("failed to init debug server: %v", err)
 	}
@@ -155,7 +161,7 @@ func run() (errReturned error) {
 		cfg.IsProduction(),
 		cfg.Servers.Client.Addr,
 		cfg.Servers.Client.AllowOrigins,
-		swagger,
+		clientSwagger,
 		kcClient,
 		cfg.Servers.Client.RequiredAccess.Resource,
 		cfg.Servers.Client.RequiredAccess.Role,

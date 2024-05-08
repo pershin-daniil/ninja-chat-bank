@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/labstack/echo/v4"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/server"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"go.uber.org/zap"
@@ -10,7 +12,6 @@ import (
 	chatsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/chats"
 	messagesrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/messages"
 	problemsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/problems"
-	serverclient "github.com/pershin-daniil/ninja-chat-bank/internal/server-client"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server-client/errhandler"
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
@@ -38,7 +39,7 @@ func initServerClient( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/f
 	outboxService *outbox.Service,
 
 	db *store.Database,
-) (*serverclient.Server, error) {
+) (*server.Server, error) {
 	lg := zap.L().Named(nameServerClient)
 
 	getHistoryUseCase, err := gethistory.New(gethistory.NewOptions(msgRepo))
@@ -61,12 +62,14 @@ func initServerClient( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/f
 		return nil, fmt.Errorf("failed to create errorHandler: %v", err)
 	}
 
-	srv, err := serverclient.New(serverclient.NewOptions(
+	srv, err := server.New(server.NewOptions(
 		lg,
 		addr,
 		allowOrigins,
 		v1Swagger,
-		v1Handlers,
+		func(g *echo.Group) {
+			clientv1.RegisterHandlers(g, v1Handlers)
+		},
 		client,
 		resource,
 		role,
