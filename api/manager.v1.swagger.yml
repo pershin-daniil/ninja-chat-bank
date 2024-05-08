@@ -8,6 +8,18 @@ servers:
     description: Development server
 
 paths:
+  /getFreeHandsBtnAvailability:
+    post:
+      description: check if free hands button is available
+      parameters:
+        - $ref: "#/components/parameters/XRequestIDHeader"
+      responses:
+        200:
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetFreeHandsBtnAvailabilityResponse"
 
 security:
   - bearerAuth: [ ]
@@ -19,7 +31,26 @@ components:
       scheme: bearer
       bearerFormat: JWT
 
+  parameters:
+    XRequestIDHeader:
+      in: header
+      name: X-Request-ID
+      schema:
+        type: string
+        format: uuid
+        x-go-type: types.RequestID
+        x-go-import:
+          path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+      required: true
+
   schemas:
+    GetFreeHandsBtnAvailabilityResponse:
+      required: [ "data" ]
+      properties:
+        data:
+          additionalProperties: true
+        error:
+          $ref: "#/components/schemas/Error"
     # Common.
 
     Error:

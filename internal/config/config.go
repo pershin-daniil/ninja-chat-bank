@@ -71,6 +71,7 @@ type PostgresConfig struct {
 type ServicesConfig struct {
 	MsgProducerConfig MsgProducerConfig `toml:"msg_producer"`
 	OutboxConfig      OutboxConfig      `toml:"outbox"`
+	ManagerLoadConfig ManagerLoadConfig `toml:"manager_load"`
 }
 
 type MsgProducerConfig struct {
@@ -84,6 +85,10 @@ type OutboxConfig struct {
 	Workers    int           `toml:"workers" validate:"required,gte=1"`
 	IdleTime   time.Duration `toml:"idle_time" validate:"required"`
 	ReserveFor time.Duration `toml:"reserve_for" validate:"required"`
+}
+
+type ManagerLoadConfig struct {
+	MaxProblems int `toml:"max_problems_at_same_time" validate:"required,gte=1"`
 }
 
 func (c Config) IsProduction() bool {
