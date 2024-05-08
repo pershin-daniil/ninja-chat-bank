@@ -22,6 +22,8 @@ import (
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
 	serverdebug "github.com/pershin-daniil/ninja-chat-bank/internal/server-debug"
 	managerv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/v1"
+	managerload "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-load"
+	inmemmanagerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool/in-mem"
 	msgproducer "github.com/pershin-daniil/ninja-chat-bank/internal/services/msg-producer"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
 	sendclientmessagejob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/send-client-message"
@@ -175,11 +177,36 @@ func run() (errReturned error) {
 		return fmt.Errorf("failed to init server: %v", err)
 	}
 
+	mngPool := inmemmanagerpool.New()
+	mngLoad, err := managerload.New(managerload.NewOptions(
+		cfg.Services.ManagerLoadConfig.MaxProblems,
+		problemRepo,
+	))
+	if err != nil {
+		return fmt.Errorf("failed to init load service: %v", err)
+	}
+
+	srvManager, err := initServerManager(
+		cfg.IsProduction(),
+		cfg.Servers.Manager.Addr,
+		cfg.Servers.Manager.AllowOrigins,
+		managerSwagger,
+		kcClient,
+		cfg.Servers.Manager.RequiredAccess.Resource,
+		cfg.Servers.Manager.RequiredAccess.Role,
+		mngLoad,
+		mngPool,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to init manager server: %v", err)
+	}
+
 	eg, ctx := errgroup.WithContext(ctx)
 
 	// Run servers.
 	eg.Go(func() error { return srvDebug.Run(ctx) })
 	eg.Go(func() error { return srvClient.Run(ctx) })
+	eg.Go(func() error { return srvManager.Run(ctx) })
 	eg.Go(func() error { return outboxService.Run(ctx) })
 
 	if err = eg.Wait(); err != nil && !errors.Is(err, context.Canceled) {

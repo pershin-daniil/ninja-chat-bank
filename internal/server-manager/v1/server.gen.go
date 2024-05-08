@@ -37,6 +37,12 @@ type Error struct {
 // ErrorCode contains HTTP error codes and specific business logic error codes (the last must be >= 1000).
 type ErrorCode = int
 
+// FreeHandsResponse defines model for FreeHandsResponse.
+type FreeHandsResponse struct {
+	Data  *map[string]interface{} `json:"data,omitempty"`
+	Error *Error                  `json:"error,omitempty"`
+}
+
 // GetFreeHandsBtnAvailabilityResponse defines model for GetFreeHandsBtnAvailabilityResponse.
 type GetFreeHandsBtnAvailabilityResponse struct {
 	Data  map[string]interface{} `json:"data"`
@@ -45,6 +51,11 @@ type GetFreeHandsBtnAvailabilityResponse struct {
 
 // XRequestIDHeader defines model for XRequestIDHeader.
 type XRequestIDHeader = types.RequestID
+
+// PostFreeHandsParams defines parameters for PostFreeHands.
+type PostFreeHandsParams struct {
+	XRequestID XRequestIDHeader `json:"X-Request-ID"`
+}
 
 // PostGetFreeHandsBtnAvailabilityParams defines parameters for PostGetFreeHandsBtnAvailability.
 type PostGetFreeHandsBtnAvailabilityParams struct {
@@ -124,8 +135,23 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// PostFreeHands request
+	PostFreeHands(ctx context.Context, params *PostFreeHandsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostGetFreeHandsBtnAvailability request
 	PostGetFreeHandsBtnAvailability(ctx context.Context, params *PostGetFreeHandsBtnAvailabilityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) PostFreeHands(ctx context.Context, params *PostFreeHandsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostFreeHandsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) PostGetFreeHandsBtnAvailability(ctx context.Context, params *PostGetFreeHandsBtnAvailabilityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -138,6 +164,46 @@ func (c *Client) PostGetFreeHandsBtnAvailability(ctx context.Context, params *Po
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewPostFreeHandsRequest generates requests for PostFreeHands
+func NewPostFreeHandsRequest(server string, params *PostFreeHandsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/freeHands")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, params.XRequestID)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Request-ID", headerParam0)
+
+	}
+
+	return req, nil
 }
 
 // NewPostGetFreeHandsBtnAvailabilityRequest generates requests for PostGetFreeHandsBtnAvailability
@@ -223,8 +289,33 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// PostFreeHandsWithResponse request
+	PostFreeHandsWithResponse(ctx context.Context, params *PostFreeHandsParams, reqEditors ...RequestEditorFn) (*PostFreeHandsResponse, error)
+
 	// PostGetFreeHandsBtnAvailabilityWithResponse request
 	PostGetFreeHandsBtnAvailabilityWithResponse(ctx context.Context, params *PostGetFreeHandsBtnAvailabilityParams, reqEditors ...RequestEditorFn) (*PostGetFreeHandsBtnAvailabilityResponse, error)
+}
+
+type PostFreeHandsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *FreeHandsResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r PostFreeHandsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostFreeHandsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type PostGetFreeHandsBtnAvailabilityResponse struct {
@@ -249,6 +340,15 @@ func (r PostGetFreeHandsBtnAvailabilityResponse) StatusCode() int {
 	return 0
 }
 
+// PostFreeHandsWithResponse request returning *PostFreeHandsResponse
+func (c *ClientWithResponses) PostFreeHandsWithResponse(ctx context.Context, params *PostFreeHandsParams, reqEditors ...RequestEditorFn) (*PostFreeHandsResponse, error) {
+	rsp, err := c.PostFreeHands(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostFreeHandsResponse(rsp)
+}
+
 // PostGetFreeHandsBtnAvailabilityWithResponse request returning *PostGetFreeHandsBtnAvailabilityResponse
 func (c *ClientWithResponses) PostGetFreeHandsBtnAvailabilityWithResponse(ctx context.Context, params *PostGetFreeHandsBtnAvailabilityParams, reqEditors ...RequestEditorFn) (*PostGetFreeHandsBtnAvailabilityResponse, error) {
 	rsp, err := c.PostGetFreeHandsBtnAvailability(ctx, params, reqEditors...)
@@ -256,6 +356,32 @@ func (c *ClientWithResponses) PostGetFreeHandsBtnAvailabilityWithResponse(ctx co
 		return nil, err
 	}
 	return ParsePostGetFreeHandsBtnAvailabilityResponse(rsp)
+}
+
+// ParsePostFreeHandsResponse parses an HTTP response from a PostFreeHandsWithResponse call
+func ParsePostFreeHandsResponse(rsp *http.Response) (*PostFreeHandsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostFreeHandsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest FreeHandsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParsePostGetFreeHandsBtnAvailabilityResponse parses an HTTP response from a PostGetFreeHandsBtnAvailabilityWithResponse call
@@ -287,6 +413,9 @@ func ParsePostGetFreeHandsBtnAvailabilityResponse(rsp *http.Response) (*PostGetF
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
+	// (POST /freeHands)
+	PostFreeHands(ctx echo.Context, params PostFreeHandsParams) error
+
 	// (POST /getFreeHandsBtnAvailability)
 	PostGetFreeHandsBtnAvailability(ctx echo.Context, params PostGetFreeHandsBtnAvailabilityParams) error
 }
@@ -294,6 +423,39 @@ type ServerInterface interface {
 // ServerInterfaceWrapper converts echo contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler ServerInterface
+}
+
+// PostFreeHands converts echo context to params.
+func (w *ServerInterfaceWrapper) PostFreeHands(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(BearerAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PostFreeHandsParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Request-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
+		var XRequestID XRequestIDHeader
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Request-ID, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Request-ID: %s", err))
+		}
+
+		params.XRequestID = XRequestID
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Request-ID is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.PostFreeHands(ctx, params)
+	return err
 }
 
 // PostGetFreeHandsBtnAvailability converts echo context to params.
@@ -357,6 +519,7 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 		Handler: si,
 	}
 
+	router.POST(baseURL+"/freeHands", wrapper.PostFreeHands)
 	router.POST(baseURL+"/getFreeHandsBtnAvailability", wrapper.PostGetFreeHandsBtnAvailability)
 
 }
@@ -364,18 +527,19 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/4xUX2/TMBD/KtbBA0hpkzEepkg87A9jBSGqbRKTRh+uyTW5LbE9+1IxVfnuyE67ttoY",
-	"PEW273e+3594BYVprdGkxUO+AosOWxJycXVzSQ8deZmcXRCW5MIea8ihHpYJaGwJcrgZrStHkzNIwNFD",
-	"x45KyMV1lIAvamoxoBfGtSiQQ9dxCQnIow14L451BQn8HlVmxK01ToZxpIYcKpa6m48L06aWnK9Zj0rU",
-	"zE2qWd/hqKhRRnPU9ylrIaexSUNjD/264/qauDl+IgV932+Gi3w/O2ciSeuMJSdMcbswJYXvW0cLyOFN",
-	"utUsXaPTCD0NhX0CJQlyE7H7BPsEWvIeK3rhrN8V7vapMBnun/UJbC/JV1CSLxxbYRMcKYwWZO3VxfX1",
-	"VFEoVAHnFepSeUsFL7hQ886zJu9VYyou9ureSU2qQS+q7byoOalfXZYd0id1kGXZ+zEk0LLmtmsh/5hl",
-	"T94FyStygdsXknNHdIG69Ceij5fIDc65YXm8JG+N9vRc3RIlRgPLkgMZbKY75yFAfQK0ceafHjzTMfaf",
-	"Raep6BzL41WoHy6fEzpyx12I2WZ1vsno15/XsM5HIDqcbkNbi9ghQqwXJhrK0oSTE9T36qqzIcbqtEZR",
-	"31FjRU4dTyeQwJKcH2xbHgTdjCWNliGHw3E2PoQkBj8OmFZ/1zRqaby8kIaainvFC7VwRKoOWDXvRIxW",
-	"7BUOPZqQraA0BtSkhBymxssrJsbBtg/E7ct2bEvSZw9IPwvmDFGI/D5k2fCLaSEdmaC1DRdxpvTOBzqr",
-	"nQfkNf//J37Rr32xfnwLu7sBidR2o3E7C4N7cssN8f0WZ7SkxtiWtKihChLoXLNOSZ6mjSmwqY2X/Cg7",
-	"OkiD77P+TwAAAP//0BSCTX4FAAA=",
+	"H4sIAAAAAAAC/8yUzW7jNhDHX4WY9tACsqU0PSwE9JDddJu0KBrsBugCqQ9jaixNLJFccug2CPTuBSk7",
+	"tuFk0972JIicz9/Mn4+g7eCsISMB6kdw6HEgIZ//Pn2gz5GCXF9eETbk0xkbqKGbfgswOBDU8Gm2tZxd",
+	"X0IBnj5H9tRALT5SAUF3NGDyXlk/oEANMXIDBciDS/5BPJsWCvhn1toZD856mcqRDmpoWbq4nGs7lI58",
+	"6NjMGjTMfWnY3ONMdyizJZp1yUbIG+zLFDjAuI24TZMP509NwTiOu+Jyvz97b3OTzltHXpjysbYNpe+3",
+	"nlZQwzflnlm59S6z67tkOBbQkCD32fe4wbGAgULAlp65Gw/B3T0ZFlP+xVjAPkn9CA0F7dkJ2zQRbY0g",
+	"m6Cubm9vFCVDlfyCQtOo4EjzirVaxsCGQlC9bVkf2X0nHakeg6ghBlFLUn/Fqjqnn9RZVVXfz6GAgQ0P",
+	"cYD6x6p6ml1C3pJPvb33RFdomvCBgrMm0CnLBgUPerfLe9KSfGnH/lXK09h+IXlK91bMxQa5xyX3LA+v",
+	"Z8em4QQO+5uD+7Ss/7eS45nl+Iu8VaSjZ3n4mOyn5EtCT/4ippXe/b3f6eHXP29hu4uJy3S7F0gn4qa+",
+	"2axsBsjSp5u3aNbqY3RJMupdh6J+R4MteXVxcw0FbMiHaUU2Z4mzdWTQMdRwPq/m51BkkeUCy9UOaCZn",
+	"g5zu2YBrUsM2QxCUGBQH5QmbB7WyXv1t/RpyGo/J57qBGm5s2E8rp9w/M3fPg96blCfP0LhI2Kch51p/",
+	"qKpJqEbI5KrRuZ51rqC8D6n0x4Nn6EuTPV3izP0Ywx+/pdOxgLJ9eQ9fpqg70mvFK5WIqy75qmUUsSbB",
+	"xClGT89y/MLif+Vk/4tkX2Z9IKrc2qGc7hap8EB+s2v8OMQlbai3biAjarKCAqLvt8qqy7K3GvvOBqnf",
+	"VG/OyqSVxfhvAAAA//8Ku/FbHgcAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

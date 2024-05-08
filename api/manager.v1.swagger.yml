@@ -21,6 +21,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/GetFreeHandsBtnAvailabilityResponse"
 
+  /freeHands:
+    post:
+      description: make manager status is ready for work
+      parameters:
+        - $ref: "#/components/parameters/XRequestIDHeader"
+      responses:
+        200:
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreeHandsResponse"
+
 security:
   - bearerAuth: [ ]
 
@@ -51,6 +64,14 @@ components:
           additionalProperties: true
         error:
           $ref: "#/components/schemas/Error"
+
+    FreeHandsResponse:
+      properties:
+        data:
+          type: object
+        error:
+          $ref: "#/components/schemas/Error"
+
     # Common.
 
     Error:

@@ -16,6 +16,15 @@ allow_origins = ["http://localhost:3011", "http://localhost:3000"]
 resource = "chat-ui-client"
 role = "support-chat-client"
 
+[servers.manager]
+addr = ":8081"
+allow_origins = ["http://localhost:3011", "http://localhost:3000"]
+
+[servers.manager.required_access]
+resource = "chat-ui-manager"
+role = "support-chat-manager"
+
+
 [clients]
 [clients.keycloak]
 base_path = "http://localhost:3010"

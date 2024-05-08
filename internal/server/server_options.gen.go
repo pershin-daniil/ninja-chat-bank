@@ -19,7 +19,7 @@ func NewOptions(
 	addr string,
 	allowOrigins []string,
 	v1Swagger *openapi3.T,
-	registerHandlersFunc func(g *echo.Group),
+	registerHandlers func(e *echo.Group),
 	introspector middlewares.Introspector,
 	resource string,
 	role string,
@@ -34,7 +34,7 @@ func NewOptions(
 	o.addr = addr
 	o.allowOrigins = allowOrigins
 	o.v1Swagger = v1Swagger
-	o.registerHandlersFunc = registerHandlersFunc
+	o.registerHandlers = registerHandlers
 	o.introspector = introspector
 	o.resource = resource
 	o.role = role
@@ -52,7 +52,7 @@ func (o *Options) Validate() error {
 	errs.Add(errors461e464ebed9.NewValidationError("addr", _validate_Options_addr(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("allowOrigins", _validate_Options_allowOrigins(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("v1Swagger", _validate_Options_v1Swagger(o)))
-	errs.Add(errors461e464ebed9.NewValidationError("registerHandlersFunc", _validate_Options_registerHandlersFunc(o)))
+	errs.Add(errors461e464ebed9.NewValidationError("registerHandlers", _validate_Options_registerHandlers(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("introspector", _validate_Options_introspector(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("resource", _validate_Options_resource(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("role", _validate_Options_role(o)))
@@ -88,9 +88,9 @@ func _validate_Options_v1Swagger(o *Options) error {
 	return nil
 }
 
-func _validate_Options_registerHandlersFunc(o *Options) error {
-	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.registerHandlersFunc, "required"); err != nil {
-		return fmt461e464ebed9.Errorf("field `registerHandlersFunc` did not pass the test: %w", err)
+func _validate_Options_registerHandlers(o *Options) error {
+	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.registerHandlers, "required"); err != nil {
+		return fmt461e464ebed9.Errorf("field `registerHandlers` did not pass the test: %w", err)
 	}
 	return nil
 }

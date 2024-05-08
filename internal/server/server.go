@@ -26,15 +26,15 @@ const (
 
 //go:generate options-gen -out-filename=server_options.gen.go -from-struct=Options
 type Options struct {
-	logger               *zap.Logger              `option:"mandatory" validate:"required"`
-	addr                 string                   `option:"mandatory" validate:"required,hostname_port"`
-	allowOrigins         []string                 `option:"mandatory" validate:"min=1"`
-	v1Swagger            *openapi3.T              `option:"mandatory" validate:"required"`
-	registerHandlersFunc func(g *echo.Group)      `option:"mandatory" validate:"required"`
-	introspector         middlewares.Introspector `option:"mandatory" validate:"required"`
-	resource             string                   `option:"mandatory" validate:"required"`
-	role                 string                   `option:"mandatory" validate:"required"`
-	errHandler           echo.HTTPErrorHandler    `option:"mandatory" validate:"required"`
+	logger           *zap.Logger              `option:"mandatory" validate:"required"`
+	addr             string                   `option:"mandatory" validate:"required,hostname_port"`
+	allowOrigins     []string                 `option:"mandatory" validate:"min=1"`
+	v1Swagger        *openapi3.T              `option:"mandatory" validate:"required"`
+	registerHandlers func(e *echo.Group)      `option:"mandatory" validate:"required"`
+	introspector     middlewares.Introspector `option:"mandatory" validate:"required"`
+	resource         string                   `option:"mandatory" validate:"required"`
+	role             string                   `option:"mandatory" validate:"required"`
+	errHandler       echo.HTTPErrorHandler    `option:"mandatory" validate:"required"`
 }
 
 type Server struct {
@@ -68,7 +68,7 @@ func New(opts Options) (*Server, error) {
 		},
 	}))
 
-	opts.registerHandlersFunc(v1)
+	opts.registerHandlers(v1)
 
 	return &Server{
 		lg: opts.logger,
