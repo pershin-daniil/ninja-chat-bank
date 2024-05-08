@@ -2,14 +2,16 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
+	"go.uber.org/zap"
+
 	keycloakclient "github.com/pershin-daniil/ninja-chat-bank/internal/clients/keycloak"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server-client/errhandler"
 	managerload "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-load"
 	managerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool"
-	"go.uber.org/zap"
 )
 
 const nameServerManager = "server-manager"

@@ -4,16 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/labstack/echo/v4"
 	echomdlwr "github.com/labstack/echo/v4/middleware"
 	oapimdlwr "github.com/oapi-codegen/echo-middleware"
-	"github.com/pershin-daniil/ninja-chat-bank/internal/middlewares"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"net/http"
-	"time"
+
+	"github.com/pershin-daniil/ninja-chat-bank/internal/middlewares"
 )
 
 const (

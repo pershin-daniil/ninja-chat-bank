@@ -2,16 +2,16 @@ package main
 
 import (
 	"fmt"
-	"github.com/labstack/echo/v4"
-	"github.com/pershin-daniil/ninja-chat-bank/internal/server"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
 
 	keycloakclient "github.com/pershin-daniil/ninja-chat-bank/internal/clients/keycloak"
 	chatsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/chats"
 	messagesrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/messages"
 	problemsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/problems"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/server"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server-client/errhandler"
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
