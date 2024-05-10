@@ -26,3 +26,11 @@ debug_mode = false
 
 [sentry]
 dsn = "DSN from Client Keys page"
+
+[db]
+[db.postgres]
+user = "chat-service"
+password = "chat-service"
+addr = "localhost:5432"
+database = "postgres"
+debug_mode = true

@@ -2,6 +2,7 @@ run:
   tests: true
   build-tags:
     - integration
+    - e2e
 
 issues:
   max-same-issues: 0
@@ -81,6 +82,10 @@ linters-settings:
       - name: deep-exit
       - name: defer
       - name: dot-imports
+        arguments:
+          - allowedPackages:
+              - "github.com/onsi/ginkgo/v2"
+              - "github.com/onsi/gomega"
       - name: duplicated-imports
       - name: early-return
       - name: empty-lines

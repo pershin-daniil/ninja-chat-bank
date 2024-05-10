@@ -6,6 +6,7 @@ type Config struct {
 	Log     LogConfig     `toml:"log"`
 	Servers ServersConfig `toml:"servers"`
 	Sentry  SentryConfig  `toml:"sentry"`
+	DB      DBConfig      `toml:"db"`
 }
 
 type ClientConfig struct {
@@ -50,6 +51,18 @@ type DebugServerConfig struct {
 
 type SentryConfig struct {
 	DSN string `toml:"dsn"`
+}
+
+type DBConfig struct {
+	Postgres PostgresConfig `toml:"postgres" validate:"required"`
+}
+
+type PostgresConfig struct {
+	User      string `toml:"user" validate:"required"`
+	Password  string `toml:"password" validate:"required"`
+	Addr      string `toml:"addr" validate:"required,hostname_port"`
+	Database  string `toml:"database" validate:"required"`
+	DebugMode bool   `toml:"debug_mode"`
 }
 
 func (c Config) IsProduction() bool {

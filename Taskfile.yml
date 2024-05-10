@@ -20,6 +20,7 @@ vars:
     github.com/daixiang0/gci@v0.13.1
     github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.1.0
     github.com/kazhuravlev/options-gen/cmd/options-gen@v0.32.0
+    github.com/onsi/ginkgo/v2/ginkgo@v2.17.1
     go.uber.org/mock/mockgen@v0.4.0
     mvdan.cc/gofumpt@v0.6.0
 
@@ -41,12 +42,19 @@ vars:
   TYPES_DST: ./internal/types/types.gen.go
 
   ENT_SCHEMA: ./internal/store/schema
+  ENT_DIR: ./internal/store/ent-gen
 
   KEYCLOAK_REALM_PATH: ./deploy/local/ban-realm.json
 
   CLIENT_V1_PKG: clientv1
   CLIENT_V1_SRC: ./api/client.v1.swagger.yml
   CLIENT_V1_DST: ./internal/server-client/v1/server.gen.go
+
+  ### E2E tests ###
+  E2E_CLIENT_V1_DST: ./tests/e2e/api/client/v1/client.gen.go
+  E2E_CLIENT_V1_PKG: apiclientv1
+  ###
+
 
 tasks:
   default:
@@ -102,6 +110,9 @@ tasks:
       TEST_KEYCLOAK_CLIENT_SECRET: biq7WcbKHgVaalqZDlhqINEi1yGK6aOw
       TEST_KEYCLOAK_TEST_USER: integration_testing
       TEST_KEYCLOAK_TEST_PASSWORD: integration_testing
+      PSQL_PASSWORD: chat-service
+      PSQL_USER: chat-service
+      TEST_PSQL_DEBUG: true
     cmds:
       - echo "- Integration tests"
       - go test -tags integration -count 1 -race ./...
@@ -112,6 +123,22 @@ tasks:
       - "{{.DOCKER_COMPOSE_CMD}} exec keycloak /opt/keycloak/bin/kc.sh export \
           --realm Bank \
           --file /dev/stdout > ./deploy/local/keycloak-bank-realm.json"
+
+  tests:e2e:
+    env:
+      E2E_CLIENT_V1_API_ENDPOINT: http://localhost:8080/v1
+
+      E2E_KEYCLOAK_BASE_PATH: http://localhost:3010
+      E2E_KEYCLOAK_REALM: Bank
+      E2E_KEYCLOAK_CLIENT_ID: e2e-testing
+      E2E_KEYCLOAK_CLIENT_SECRET: hD3CVXnQ1k3TTUmUA5eHeARIfTQFxM2U
+      E2E_KEYCLOAK_CLIENT_DEBUG: false
+      E2E_KEYCLOAK_CLIENTS: biba,boba
+    dir: "{{.TOOLS_DIR}}"
+    cmds:
+      - echo "- End-to-end tests..."
+      # NOTE: It's important to run tests serial (without `-p` flag) – for correct `clientsPool` sharing.
+      - ./ginkgo --fail-fast --timeout=1m --tags e2e {{.CLI_ARGS}} ../../tests/e2e
 
   build:
     cmds:
@@ -135,6 +162,7 @@ tasks:
     - task: gen:types
     - task: ent:gen
     - task: gen:api
+    - task: gen:e2e
 
   gen:types:
     cmds:
@@ -148,13 +176,19 @@ tasks:
 
   ent:gen:
     cmds:
-      - go run -mod=mod entgo.io/ent/cmd/ent generate {{.ENT_SCHEMA}}
+      - go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/upsert,sql/lock --template ./internal/store/templates/ {{.ENT_SCHEMA}}
       - task: tidy
 
   gen:api:
     dir: "{{.TOOLS_DIR}}"
     cmds:
       - ./oapi-codegen -old-config-style -package {{.CLIENT_V1_PKG }} ../../{{.CLIENT_V1_SRC}} > ../../{{.CLIENT_V1_DST}}
+
+  gen:e2e:
+    dir: "{{.TOOLS_DIR}}"
+    cmds:
+      - echo "[E2E] Generate client API..."
+      - ./oapi-codegen --old-config-style -generate types,client -package {{.E2E_CLIENT_V1_PKG}} ../../{{.CLIENT_V1_SRC}} > ../../{{.E2E_CLIENT_V1_DST}}
 
   deps:
     cmds:
@@ -195,4 +229,3 @@ tasks:
     cmds:
       - "{{.DOCKER_COMPOSE_CMD}} rm -fsv {{.SERVICE}}"
       - "{{.DOCKER_COMPOSE_CMD}} up -d {{.SERVICE}}"
-
