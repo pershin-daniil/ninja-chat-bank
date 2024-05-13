@@ -44,6 +44,11 @@ vars:
   TYPES_DST: ./internal/types/types.gen.go
 
   ENT_SCHEMA: ./internal/store/schema
+  ENT_TEMPLATES: ./internal/store/templates
+  ENT_FEATURES: |
+    sql/execquery
+    sql/upsert
+
   ENT_DIR: ./internal/store/ent-gen
 
   KEYCLOAK_REALM_PATH: ./deploy/local/ban-realm.json
@@ -176,13 +181,15 @@ tasks:
       - go run ./cmd/gen-types {{.TYPES_PKG}} {{ .TYPES | trim | splitLines | join "," }} {{.TYPES_DST}}
 
   ent:new:
+    dir: "{{.TOOLS_DIR}}"
     cmds:
-      - go run -mod=mod entgo.io/ent/cmd/ent new --target {{.ENT_SCHEMA}} {{$.CLI_ARGS}}
+      - ./ent new --target {{.ENT_SCHEMA}} {{$.CLI_ARGS}}
       - task: tidy
 
   ent:gen:
+    dir: "{{.TOOLS_DIR}}"
     cmds:
-      - go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/upsert,sql/lock --template ./internal/store/templates/ {{.ENT_SCHEMA}}
+      - ./ent generate --template ../../{{.ENT_TEMPLATES}} --feature {{ .ENT_FEATURES | trim | splitLines | join "," }} ../../{{.ENT_SCHEMA}}
       - task: tidy
 
   gen:api:

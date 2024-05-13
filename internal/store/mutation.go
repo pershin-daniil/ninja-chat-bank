@@ -1737,19 +1737,19 @@ type MessageMutation struct {
 	typ                    string
 	id                     *types.MessageID
 	author_id              *types.UserID
-	initial_request_id     *types.RequestID
 	is_visible_for_client  *bool
 	is_visible_for_manager *bool
 	body                   *string
 	checked_at             *time.Time
 	is_blocked             *bool
 	is_service             *bool
+	initial_request_id     *types.RequestID
 	created_at             *time.Time
 	clearedFields          map[string]struct{}
-	problem                *types.ProblemID
-	clearedproblem         bool
 	chat                   *types.ChatID
 	clearedchat            bool
+	problem                *types.ProblemID
+	clearedproblem         bool
 	done                   bool
 	oldValue               func(context.Context) (*Message, error)
 	predicates             []predicate.Message
@@ -1859,55 +1859,6 @@ func (m *MessageMutation) IDs(ctx context.Context) ([]types.MessageID, error) {
 	}
 }
 
-// SetAuthorID sets the "author_id" field.
-func (m *MessageMutation) SetAuthorID(ti types.UserID) {
-	m.author_id = &ti
-}
-
-// AuthorID returns the value of the "author_id" field in the mutation.
-func (m *MessageMutation) AuthorID() (r types.UserID, exists bool) {
-	v := m.author_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldAuthorID returns the old "author_id" field's value of the Message entity.
-// If the Message object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MessageMutation) OldAuthorID(ctx context.Context) (v types.UserID, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAuthorID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAuthorID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAuthorID: %w", err)
-	}
-	return oldValue.AuthorID, nil
-}
-
-// ClearAuthorID clears the value of the "author_id" field.
-func (m *MessageMutation) ClearAuthorID() {
-	m.author_id = nil
-	m.clearedFields[message.FieldAuthorID] = struct{}{}
-}
-
-// AuthorIDCleared returns if the "author_id" field was cleared in this mutation.
-func (m *MessageMutation) AuthorIDCleared() bool {
-	_, ok := m.clearedFields[message.FieldAuthorID]
-	return ok
-}
-
-// ResetAuthorID resets all changes to the "author_id" field.
-func (m *MessageMutation) ResetAuthorID() {
-	m.author_id = nil
-	delete(m.clearedFields, message.FieldAuthorID)
-}
-
 // SetChatID sets the "chat_id" field.
 func (m *MessageMutation) SetChatID(ti types.ChatID) {
 	m.chat = &ti
@@ -1980,40 +1931,53 @@ func (m *MessageMutation) ResetProblemID() {
 	m.problem = nil
 }
 
-// SetInitialRequestID sets the "initial_request_id" field.
-func (m *MessageMutation) SetInitialRequestID(ti types.RequestID) {
-	m.initial_request_id = &ti
+// SetAuthorID sets the "author_id" field.
+func (m *MessageMutation) SetAuthorID(ti types.UserID) {
+	m.author_id = &ti
 }
 
-// InitialRequestID returns the value of the "initial_request_id" field in the mutation.
-func (m *MessageMutation) InitialRequestID() (r types.RequestID, exists bool) {
-	v := m.initial_request_id
+// AuthorID returns the value of the "author_id" field in the mutation.
+func (m *MessageMutation) AuthorID() (r types.UserID, exists bool) {
+	v := m.author_id
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldInitialRequestID returns the old "initial_request_id" field's value of the Message entity.
+// OldAuthorID returns the old "author_id" field's value of the Message entity.
 // If the Message object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MessageMutation) OldInitialRequestID(ctx context.Context) (v types.RequestID, err error) {
+func (m *MessageMutation) OldAuthorID(ctx context.Context) (v types.UserID, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldInitialRequestID is only allowed on UpdateOne operations")
+		return v, errors.New("OldAuthorID is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldInitialRequestID requires an ID field in the mutation")
+		return v, errors.New("OldAuthorID requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldInitialRequestID: %w", err)
+		return v, fmt.Errorf("querying old value for OldAuthorID: %w", err)
 	}
-	return oldValue.InitialRequestID, nil
+	return oldValue.AuthorID, nil
 }
 
-// ResetInitialRequestID resets all changes to the "initial_request_id" field.
-func (m *MessageMutation) ResetInitialRequestID() {
-	m.initial_request_id = nil
+// ClearAuthorID clears the value of the "author_id" field.
+func (m *MessageMutation) ClearAuthorID() {
+	m.author_id = nil
+	m.clearedFields[message.FieldAuthorID] = struct{}{}
+}
+
+// AuthorIDCleared returns if the "author_id" field was cleared in this mutation.
+func (m *MessageMutation) AuthorIDCleared() bool {
+	_, ok := m.clearedFields[message.FieldAuthorID]
+	return ok
+}
+
+// ResetAuthorID resets all changes to the "author_id" field.
+func (m *MessageMutation) ResetAuthorID() {
+	m.author_id = nil
+	delete(m.clearedFields, message.FieldAuthorID)
 }
 
 // SetIsVisibleForClient sets the "is_visible_for_client" field.
@@ -2245,6 +2209,42 @@ func (m *MessageMutation) ResetIsService() {
 	m.is_service = nil
 }
 
+// SetInitialRequestID sets the "initial_request_id" field.
+func (m *MessageMutation) SetInitialRequestID(ti types.RequestID) {
+	m.initial_request_id = &ti
+}
+
+// InitialRequestID returns the value of the "initial_request_id" field in the mutation.
+func (m *MessageMutation) InitialRequestID() (r types.RequestID, exists bool) {
+	v := m.initial_request_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInitialRequestID returns the old "initial_request_id" field's value of the Message entity.
+// If the Message object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MessageMutation) OldInitialRequestID(ctx context.Context) (v types.RequestID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInitialRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInitialRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInitialRequestID: %w", err)
+	}
+	return oldValue.InitialRequestID, nil
+}
+
+// ResetInitialRequestID resets all changes to the "initial_request_id" field.
+func (m *MessageMutation) ResetInitialRequestID() {
+	m.initial_request_id = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *MessageMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -2281,33 +2281,6 @@ func (m *MessageMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
-// ClearProblem clears the "problem" edge to the Problem entity.
-func (m *MessageMutation) ClearProblem() {
-	m.clearedproblem = true
-	m.clearedFields[message.FieldProblemID] = struct{}{}
-}
-
-// ProblemCleared reports if the "problem" edge to the Problem entity was cleared.
-func (m *MessageMutation) ProblemCleared() bool {
-	return m.clearedproblem
-}
-
-// ProblemIDs returns the "problem" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ProblemID instead. It exists only for internal usage by the builders.
-func (m *MessageMutation) ProblemIDs() (ids []types.ProblemID) {
-	if id := m.problem; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetProblem resets all changes to the "problem" edge.
-func (m *MessageMutation) ResetProblem() {
-	m.problem = nil
-	m.clearedproblem = false
-}
-
 // ClearChat clears the "chat" edge to the Chat entity.
 func (m *MessageMutation) ClearChat() {
 	m.clearedchat = true
@@ -2333,6 +2306,33 @@ func (m *MessageMutation) ChatIDs() (ids []types.ChatID) {
 func (m *MessageMutation) ResetChat() {
 	m.chat = nil
 	m.clearedchat = false
+}
+
+// ClearProblem clears the "problem" edge to the Problem entity.
+func (m *MessageMutation) ClearProblem() {
+	m.clearedproblem = true
+	m.clearedFields[message.FieldProblemID] = struct{}{}
+}
+
+// ProblemCleared reports if the "problem" edge to the Problem entity was cleared.
+func (m *MessageMutation) ProblemCleared() bool {
+	return m.clearedproblem
+}
+
+// ProblemIDs returns the "problem" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ProblemID instead. It exists only for internal usage by the builders.
+func (m *MessageMutation) ProblemIDs() (ids []types.ProblemID) {
+	if id := m.problem; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetProblem resets all changes to the "problem" edge.
+func (m *MessageMutation) ResetProblem() {
+	m.problem = nil
+	m.clearedproblem = false
 }
 
 // Where appends a list predicates to the MessageMutation builder.
@@ -2370,17 +2370,14 @@ func (m *MessageMutation) Type() string {
 // AddedFields().
 func (m *MessageMutation) Fields() []string {
 	fields := make([]string, 0, 11)
-	if m.author_id != nil {
-		fields = append(fields, message.FieldAuthorID)
-	}
 	if m.chat != nil {
 		fields = append(fields, message.FieldChatID)
 	}
 	if m.problem != nil {
 		fields = append(fields, message.FieldProblemID)
 	}
-	if m.initial_request_id != nil {
-		fields = append(fields, message.FieldInitialRequestID)
+	if m.author_id != nil {
+		fields = append(fields, message.FieldAuthorID)
 	}
 	if m.is_visible_for_client != nil {
 		fields = append(fields, message.FieldIsVisibleForClient)
@@ -2400,6 +2397,9 @@ func (m *MessageMutation) Fields() []string {
 	if m.is_service != nil {
 		fields = append(fields, message.FieldIsService)
 	}
+	if m.initial_request_id != nil {
+		fields = append(fields, message.FieldInitialRequestID)
+	}
 	if m.created_at != nil {
 		fields = append(fields, message.FieldCreatedAt)
 	}
@@ -2411,14 +2411,12 @@ func (m *MessageMutation) Fields() []string {
 // schema.
 func (m *MessageMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case message.FieldAuthorID:
-		return m.AuthorID()
 	case message.FieldChatID:
 		return m.ChatID()
 	case message.FieldProblemID:
 		return m.ProblemID()
-	case message.FieldInitialRequestID:
-		return m.InitialRequestID()
+	case message.FieldAuthorID:
+		return m.AuthorID()
 	case message.FieldIsVisibleForClient:
 		return m.IsVisibleForClient()
 	case message.FieldIsVisibleForManager:
@@ -2431,6 +2429,8 @@ func (m *MessageMutation) Field(name string) (ent.Value, bool) {
 		return m.IsBlocked()
 	case message.FieldIsService:
 		return m.IsService()
+	case message.FieldInitialRequestID:
+		return m.InitialRequestID()
 	case message.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -2442,14 +2442,12 @@ func (m *MessageMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *MessageMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case message.FieldAuthorID:
-		return m.OldAuthorID(ctx)
 	case message.FieldChatID:
 		return m.OldChatID(ctx)
 	case message.FieldProblemID:
 		return m.OldProblemID(ctx)
-	case message.FieldInitialRequestID:
-		return m.OldInitialRequestID(ctx)
+	case message.FieldAuthorID:
+		return m.OldAuthorID(ctx)
 	case message.FieldIsVisibleForClient:
 		return m.OldIsVisibleForClient(ctx)
 	case message.FieldIsVisibleForManager:
@@ -2462,6 +2460,8 @@ func (m *MessageMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldIsBlocked(ctx)
 	case message.FieldIsService:
 		return m.OldIsService(ctx)
+	case message.FieldInitialRequestID:
+		return m.OldInitialRequestID(ctx)
 	case message.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -2473,13 +2473,6 @@ func (m *MessageMutation) OldField(ctx context.Context, name string) (ent.Value,
 // type.
 func (m *MessageMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case message.FieldAuthorID:
-		v, ok := value.(types.UserID)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAuthorID(v)
-		return nil
 	case message.FieldChatID:
 		v, ok := value.(types.ChatID)
 		if !ok {
@@ -2494,12 +2487,12 @@ func (m *MessageMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetProblemID(v)
 		return nil
-	case message.FieldInitialRequestID:
-		v, ok := value.(types.RequestID)
+	case message.FieldAuthorID:
+		v, ok := value.(types.UserID)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetInitialRequestID(v)
+		m.SetAuthorID(v)
 		return nil
 	case message.FieldIsVisibleForClient:
 		v, ok := value.(bool)
@@ -2542,6 +2535,13 @@ func (m *MessageMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIsService(v)
+		return nil
+	case message.FieldInitialRequestID:
+		v, ok := value.(types.RequestID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInitialRequestID(v)
 		return nil
 	case message.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -2614,17 +2614,14 @@ func (m *MessageMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *MessageMutation) ResetField(name string) error {
 	switch name {
-	case message.FieldAuthorID:
-		m.ResetAuthorID()
-		return nil
 	case message.FieldChatID:
 		m.ResetChatID()
 		return nil
 	case message.FieldProblemID:
 		m.ResetProblemID()
 		return nil
-	case message.FieldInitialRequestID:
-		m.ResetInitialRequestID()
+	case message.FieldAuthorID:
+		m.ResetAuthorID()
 		return nil
 	case message.FieldIsVisibleForClient:
 		m.ResetIsVisibleForClient()
@@ -2644,6 +2641,9 @@ func (m *MessageMutation) ResetField(name string) error {
 	case message.FieldIsService:
 		m.ResetIsService()
 		return nil
+	case message.FieldInitialRequestID:
+		m.ResetInitialRequestID()
+		return nil
 	case message.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
@@ -2654,11 +2654,11 @@ func (m *MessageMutation) ResetField(name string) error {
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *MessageMutation) AddedEdges() []string {
 	edges := make([]string, 0, 2)
-	if m.problem != nil {
-		edges = append(edges, message.EdgeProblem)
-	}
 	if m.chat != nil {
 		edges = append(edges, message.EdgeChat)
+	}
+	if m.problem != nil {
+		edges = append(edges, message.EdgeProblem)
 	}
 	return edges
 }
@@ -2667,12 +2667,12 @@ func (m *MessageMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *MessageMutation) AddedIDs(name string) []ent.Value {
 	switch name {
-	case message.EdgeProblem:
-		if id := m.problem; id != nil {
-			return []ent.Value{*id}
-		}
 	case message.EdgeChat:
 		if id := m.chat; id != nil {
+			return []ent.Value{*id}
+		}
+	case message.EdgeProblem:
+		if id := m.problem; id != nil {
 			return []ent.Value{*id}
 		}
 	}
@@ -2694,11 +2694,11 @@ func (m *MessageMutation) RemovedIDs(name string) []ent.Value {
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *MessageMutation) ClearedEdges() []string {
 	edges := make([]string, 0, 2)
-	if m.clearedproblem {
-		edges = append(edges, message.EdgeProblem)
-	}
 	if m.clearedchat {
 		edges = append(edges, message.EdgeChat)
+	}
+	if m.clearedproblem {
+		edges = append(edges, message.EdgeProblem)
 	}
 	return edges
 }
@@ -2707,10 +2707,10 @@ func (m *MessageMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *MessageMutation) EdgeCleared(name string) bool {
 	switch name {
-	case message.EdgeProblem:
-		return m.clearedproblem
 	case message.EdgeChat:
 		return m.clearedchat
+	case message.EdgeProblem:
+		return m.clearedproblem
 	}
 	return false
 }
@@ -2719,11 +2719,11 @@ func (m *MessageMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *MessageMutation) ClearEdge(name string) error {
 	switch name {
-	case message.EdgeProblem:
-		m.ClearProblem()
-		return nil
 	case message.EdgeChat:
 		m.ClearChat()
+		return nil
+	case message.EdgeProblem:
+		m.ClearProblem()
 		return nil
 	}
 	return fmt.Errorf("unknown Message unique edge %s", name)
@@ -2733,11 +2733,11 @@ func (m *MessageMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *MessageMutation) ResetEdge(name string) error {
 	switch name {
-	case message.EdgeProblem:
-		m.ResetProblem()
-		return nil
 	case message.EdgeChat:
 		m.ResetChat()
+		return nil
+	case message.EdgeProblem:
+		m.ResetProblem()
 		return nil
 	}
 	return fmt.Errorf("unknown Message edge %s", name)
@@ -2753,11 +2753,11 @@ type ProblemMutation struct {
 	resolved_at     *time.Time
 	created_at      *time.Time
 	clearedFields   map[string]struct{}
+	chat            *types.ChatID
+	clearedchat     bool
 	messages        map[types.MessageID]struct{}
 	removedmessages map[types.MessageID]struct{}
 	clearedmessages bool
-	chat            *types.ChatID
-	clearedchat     bool
 	done            bool
 	oldValue        func(context.Context) (*Problem, error)
 	predicates      []predicate.Problem
@@ -3037,6 +3037,33 @@ func (m *ProblemMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
+// ClearChat clears the "chat" edge to the Chat entity.
+func (m *ProblemMutation) ClearChat() {
+	m.clearedchat = true
+	m.clearedFields[problem.FieldChatID] = struct{}{}
+}
+
+// ChatCleared reports if the "chat" edge to the Chat entity was cleared.
+func (m *ProblemMutation) ChatCleared() bool {
+	return m.clearedchat
+}
+
+// ChatIDs returns the "chat" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ChatID instead. It exists only for internal usage by the builders.
+func (m *ProblemMutation) ChatIDs() (ids []types.ChatID) {
+	if id := m.chat; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetChat resets all changes to the "chat" edge.
+func (m *ProblemMutation) ResetChat() {
+	m.chat = nil
+	m.clearedchat = false
+}
+
 // AddMessageIDs adds the "messages" edge to the Message entity by ids.
 func (m *ProblemMutation) AddMessageIDs(ids ...types.MessageID) {
 	if m.messages == nil {
@@ -3089,33 +3116,6 @@ func (m *ProblemMutation) ResetMessages() {
 	m.messages = nil
 	m.clearedmessages = false
 	m.removedmessages = nil
-}
-
-// ClearChat clears the "chat" edge to the Chat entity.
-func (m *ProblemMutation) ClearChat() {
-	m.clearedchat = true
-	m.clearedFields[problem.FieldChatID] = struct{}{}
-}
-
-// ChatCleared reports if the "chat" edge to the Chat entity was cleared.
-func (m *ProblemMutation) ChatCleared() bool {
-	return m.clearedchat
-}
-
-// ChatIDs returns the "chat" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ChatID instead. It exists only for internal usage by the builders.
-func (m *ProblemMutation) ChatIDs() (ids []types.ChatID) {
-	if id := m.chat; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetChat resets all changes to the "chat" edge.
-func (m *ProblemMutation) ResetChat() {
-	m.chat = nil
-	m.clearedchat = false
 }
 
 // Where appends a list predicates to the ProblemMutation builder.
@@ -3318,11 +3318,11 @@ func (m *ProblemMutation) ResetField(name string) error {
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ProblemMutation) AddedEdges() []string {
 	edges := make([]string, 0, 2)
-	if m.messages != nil {
-		edges = append(edges, problem.EdgeMessages)
-	}
 	if m.chat != nil {
 		edges = append(edges, problem.EdgeChat)
+	}
+	if m.messages != nil {
+		edges = append(edges, problem.EdgeMessages)
 	}
 	return edges
 }
@@ -3331,16 +3331,16 @@ func (m *ProblemMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *ProblemMutation) AddedIDs(name string) []ent.Value {
 	switch name {
+	case problem.EdgeChat:
+		if id := m.chat; id != nil {
+			return []ent.Value{*id}
+		}
 	case problem.EdgeMessages:
 		ids := make([]ent.Value, 0, len(m.messages))
 		for id := range m.messages {
 			ids = append(ids, id)
 		}
 		return ids
-	case problem.EdgeChat:
-		if id := m.chat; id != nil {
-			return []ent.Value{*id}
-		}
 	}
 	return nil
 }
@@ -3371,11 +3371,11 @@ func (m *ProblemMutation) RemovedIDs(name string) []ent.Value {
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ProblemMutation) ClearedEdges() []string {
 	edges := make([]string, 0, 2)
-	if m.clearedmessages {
-		edges = append(edges, problem.EdgeMessages)
-	}
 	if m.clearedchat {
 		edges = append(edges, problem.EdgeChat)
+	}
+	if m.clearedmessages {
+		edges = append(edges, problem.EdgeMessages)
 	}
 	return edges
 }
@@ -3384,10 +3384,10 @@ func (m *ProblemMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *ProblemMutation) EdgeCleared(name string) bool {
 	switch name {
-	case problem.EdgeMessages:
-		return m.clearedmessages
 	case problem.EdgeChat:
 		return m.clearedchat
+	case problem.EdgeMessages:
+		return m.clearedmessages
 	}
 	return false
 }
@@ -3407,11 +3407,11 @@ func (m *ProblemMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *ProblemMutation) ResetEdge(name string) error {
 	switch name {
-	case problem.EdgeMessages:
-		m.ResetMessages()
-		return nil
 	case problem.EdgeChat:
 		m.ResetChat()
+		return nil
+	case problem.EdgeMessages:
+		m.ResetMessages()
 		return nil
 	}
 	return fmt.Errorf("unknown Problem edge %s", name)

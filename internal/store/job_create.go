@@ -56,6 +56,14 @@ func (jc *JobCreate) SetAvailableAt(t time.Time) *JobCreate {
 	return jc
 }
 
+// SetNillableAvailableAt sets the "available_at" field if the given value is not nil.
+func (jc *JobCreate) SetNillableAvailableAt(t *time.Time) *JobCreate {
+	if t != nil {
+		jc.SetAvailableAt(*t)
+	}
+	return jc
+}
+
 // SetReservedUntil sets the "reserved_until" field.
 func (jc *JobCreate) SetReservedUntil(t time.Time) *JobCreate {
 	jc.mutation.SetReservedUntil(t)
@@ -136,6 +144,10 @@ func (jc *JobCreate) defaults() {
 	if _, ok := jc.mutation.Attempts(); !ok {
 		v := job.DefaultAttempts
 		jc.mutation.SetAttempts(v)
+	}
+	if _, ok := jc.mutation.AvailableAt(); !ok {
+		v := job.DefaultAvailableAt()
+		jc.mutation.SetAvailableAt(v)
 	}
 	if _, ok := jc.mutation.ReservedUntil(); !ok {
 		v := job.DefaultReservedUntil()

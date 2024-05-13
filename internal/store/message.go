@@ -20,14 +20,12 @@ type Message struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID types.MessageID `json:"id,omitempty"`
-	// AuthorID holds the value of the "author_id" field.
-	AuthorID types.UserID `json:"author_id,omitempty"`
 	// ChatID holds the value of the "chat_id" field.
 	ChatID types.ChatID `json:"chat_id,omitempty"`
 	// ProblemID holds the value of the "problem_id" field.
 	ProblemID types.ProblemID `json:"problem_id,omitempty"`
-	// InitialRequestID holds the value of the "initial_request_id" field.
-	InitialRequestID types.RequestID `json:"initial_request_id,omitempty"`
+	// AuthorID holds the value of the "author_id" field.
+	AuthorID types.UserID `json:"author_id,omitempty"`
 	// IsVisibleForClient holds the value of the "is_visible_for_client" field.
 	IsVisibleForClient bool `json:"is_visible_for_client,omitempty"`
 	// IsVisibleForManager holds the value of the "is_visible_for_manager" field.
@@ -40,6 +38,8 @@ type Message struct {
 	IsBlocked bool `json:"is_blocked,omitempty"`
 	// IsService holds the value of the "is_service" field.
 	IsService bool `json:"is_service,omitempty"`
+	// InitialRequestID holds the value of the "initial_request_id" field.
+	InitialRequestID types.RequestID `json:"initial_request_id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -50,24 +50,13 @@ type Message struct {
 
 // MessageEdges holds the relations/edges for other nodes in the graph.
 type MessageEdges struct {
-	// Problem holds the value of the problem edge.
-	Problem *Problem `json:"problem,omitempty"`
 	// Chat holds the value of the chat edge.
 	Chat *Chat `json:"chat,omitempty"`
+	// Problem holds the value of the problem edge.
+	Problem *Problem `json:"problem,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [2]bool
-}
-
-// ProblemOrErr returns the Problem value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e MessageEdges) ProblemOrErr() (*Problem, error) {
-	if e.Problem != nil {
-		return e.Problem, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: problem.Label}
-	}
-	return nil, &NotLoadedError{edge: "problem"}
 }
 
 // ChatOrErr returns the Chat value or an error if the edge
@@ -75,10 +64,21 @@ func (e MessageEdges) ProblemOrErr() (*Problem, error) {
 func (e MessageEdges) ChatOrErr() (*Chat, error) {
 	if e.Chat != nil {
 		return e.Chat, nil
-	} else if e.loadedTypes[1] {
+	} else if e.loadedTypes[0] {
 		return nil, &NotFoundError{label: chat.Label}
 	}
 	return nil, &NotLoadedError{edge: "chat"}
+}
+
+// ProblemOrErr returns the Problem value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e MessageEdges) ProblemOrErr() (*Problem, error) {
+	if e.Problem != nil {
+		return e.Problem, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: problem.Label}
+	}
+	return nil, &NotLoadedError{edge: "problem"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -123,12 +123,6 @@ func (m *Message) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				m.ID = *value
 			}
-		case message.FieldAuthorID:
-			if value, ok := values[i].(*types.UserID); !ok {
-				return fmt.Errorf("unexpected type %T for field author_id", values[i])
-			} else if value != nil {
-				m.AuthorID = *value
-			}
 		case message.FieldChatID:
 			if value, ok := values[i].(*types.ChatID); !ok {
 				return fmt.Errorf("unexpected type %T for field chat_id", values[i])
@@ -141,11 +135,11 @@ func (m *Message) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				m.ProblemID = *value
 			}
-		case message.FieldInitialRequestID:
-			if value, ok := values[i].(*types.RequestID); !ok {
-				return fmt.Errorf("unexpected type %T for field initial_request_id", values[i])
+		case message.FieldAuthorID:
+			if value, ok := values[i].(*types.UserID); !ok {
+				return fmt.Errorf("unexpected type %T for field author_id", values[i])
 			} else if value != nil {
-				m.InitialRequestID = *value
+				m.AuthorID = *value
 			}
 		case message.FieldIsVisibleForClient:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -183,6 +177,12 @@ func (m *Message) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				m.IsService = value.Bool
 			}
+		case message.FieldInitialRequestID:
+			if value, ok := values[i].(*types.RequestID); !ok {
+				return fmt.Errorf("unexpected type %T for field initial_request_id", values[i])
+			} else if value != nil {
+				m.InitialRequestID = *value
+			}
 		case message.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -202,14 +202,14 @@ func (m *Message) Value(name string) (ent.Value, error) {
 	return m.selectValues.Get(name)
 }
 
-// QueryProblem queries the "problem" edge of the Message entity.
-func (m *Message) QueryProblem() *ProblemQuery {
-	return NewMessageClient(m.config).QueryProblem(m)
-}
-
 // QueryChat queries the "chat" edge of the Message entity.
 func (m *Message) QueryChat() *ChatQuery {
 	return NewMessageClient(m.config).QueryChat(m)
+}
+
+// QueryProblem queries the "problem" edge of the Message entity.
+func (m *Message) QueryProblem() *ProblemQuery {
+	return NewMessageClient(m.config).QueryProblem(m)
 }
 
 // Update returns a builder for updating this Message.
@@ -235,17 +235,14 @@ func (m *Message) String() string {
 	var builder strings.Builder
 	builder.WriteString("Message(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", m.ID))
-	builder.WriteString("author_id=")
-	builder.WriteString(fmt.Sprintf("%v", m.AuthorID))
-	builder.WriteString(", ")
 	builder.WriteString("chat_id=")
 	builder.WriteString(fmt.Sprintf("%v", m.ChatID))
 	builder.WriteString(", ")
 	builder.WriteString("problem_id=")
 	builder.WriteString(fmt.Sprintf("%v", m.ProblemID))
 	builder.WriteString(", ")
-	builder.WriteString("initial_request_id=")
-	builder.WriteString(fmt.Sprintf("%v", m.InitialRequestID))
+	builder.WriteString("author_id=")
+	builder.WriteString(fmt.Sprintf("%v", m.AuthorID))
 	builder.WriteString(", ")
 	builder.WriteString("is_visible_for_client=")
 	builder.WriteString(fmt.Sprintf("%v", m.IsVisibleForClient))
@@ -264,6 +261,9 @@ func (m *Message) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("is_service=")
 	builder.WriteString(fmt.Sprintf("%v", m.IsService))
+	builder.WriteString(", ")
+	builder.WriteString("initial_request_id=")
+	builder.WriteString(fmt.Sprintf("%v", m.InitialRequestID))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(m.CreatedAt.Format(time.ANSIC))

@@ -35,14 +35,12 @@ func NewPSQLClient(opts PSQLOptions) (*Client, error) {
 		return nil, fmt.Errorf("failed to init db driver: %v", err)
 	}
 
-	var clientOpts []Option
-
-	drv := Driver(entsql.OpenDB(dialect.Postgres, db))
-
-	clientOpts = append(clientOpts, drv)
-
+	clientOpts := []Option{Driver(entsql.OpenDB(dialect.Postgres, db))}
 	if opts.debugMode {
-		clientOpts = append(clientOpts, Debug())
+		l := func(a ...any) {
+			zap.L().Named("store").Sugar().Debug(a...)
+		}
+		clientOpts = append(clientOpts, Debug(), Log(l))
 	}
 
 	return NewClient(clientOpts...), nil
@@ -61,21 +59,12 @@ func NewPgxDB(opts PgxOptions) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to validate pgxOptions store: %v", err)
 	}
 
-	dbURL := url.URL{
-		Scheme: "postgres",
-		Host:   opts.address,
+	dsn := (&url.URL{
+		Scheme: "postgresql",
 		User:   url.UserPassword(opts.username, opts.password),
+		Host:   opts.address,
 		Path:   opts.database,
-	}
+	}).String()
 
-	db, err := sql.Open("pgx", dbURL.String())
-	if err != nil {
-		return nil, fmt.Errorf("failed to open db: %v", err)
-	}
-
-	if err = db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping db: %v", err)
-	}
-
-	return db, nil
+	return sql.Open("pgx", dsn)
 }

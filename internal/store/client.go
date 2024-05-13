@@ -21,6 +21,8 @@ import (
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/job"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/message"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/problem"
+
+	stdsql "database/sql"
 )
 
 // Client is the client that holds all ent builders.
@@ -777,22 +779,6 @@ func (c *MessageClient) GetX(ctx context.Context, id types.MessageID) *Message {
 	return obj
 }
 
-// QueryProblem queries the problem edge of a Message.
-func (c *MessageClient) QueryProblem(m *Message) *ProblemQuery {
-	query := (&ProblemClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(message.Table, message.FieldID, id),
-			sqlgraph.To(problem.Table, problem.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, message.ProblemTable, message.ProblemColumn),
-		)
-		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryChat queries the chat edge of a Message.
 func (c *MessageClient) QueryChat(m *Message) *ChatQuery {
 	query := (&ChatClient{config: c.config}).Query()
@@ -802,6 +788,22 @@ func (c *MessageClient) QueryChat(m *Message) *ChatQuery {
 			sqlgraph.From(message.Table, message.FieldID, id),
 			sqlgraph.To(chat.Table, chat.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, message.ChatTable, message.ChatColumn),
+		)
+		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryProblem queries the problem edge of a Message.
+func (c *MessageClient) QueryProblem(m *Message) *ProblemQuery {
+	query := (&ProblemClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(message.Table, message.FieldID, id),
+			sqlgraph.To(problem.Table, problem.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, message.ProblemTable, message.ProblemColumn),
 		)
 		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
 		return fromV, nil
@@ -942,22 +944,6 @@ func (c *ProblemClient) GetX(ctx context.Context, id types.ProblemID) *Problem {
 	return obj
 }
 
-// QueryMessages queries the messages edge of a Problem.
-func (c *ProblemClient) QueryMessages(pr *Problem) *MessageQuery {
-	query := (&MessageClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := pr.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(problem.Table, problem.FieldID, id),
-			sqlgraph.To(message.Table, message.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, problem.MessagesTable, problem.MessagesColumn),
-		)
-		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryChat queries the chat edge of a Problem.
 func (c *ProblemClient) QueryChat(pr *Problem) *ChatQuery {
 	query := (&ChatClient{config: c.config}).Query()
@@ -967,6 +953,22 @@ func (c *ProblemClient) QueryChat(pr *Problem) *ChatQuery {
 			sqlgraph.From(problem.Table, problem.FieldID, id),
 			sqlgraph.To(chat.Table, chat.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, problem.ChatTable, problem.ChatColumn),
+		)
+		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryMessages queries the messages edge of a Problem.
+func (c *ProblemClient) QueryMessages(pr *Problem) *MessageQuery {
+	query := (&MessageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := pr.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(problem.Table, problem.FieldID, id),
+			sqlgraph.To(message.Table, message.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, problem.MessagesTable, problem.MessagesColumn),
 		)
 		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
 		return fromV, nil
@@ -1008,3 +1010,27 @@ type (
 		Chat, FailedJob, Job, Message, Problem []ent.Interceptor
 	}
 )
+
+// ExecContext allows calling the underlying ExecContext method of the driver if it is supported by it.
+// See, database/sql#DB.ExecContext for more information.
+func (c *config) ExecContext(ctx context.Context, query string, args ...any) (stdsql.Result, error) {
+	ex, ok := c.driver.(interface {
+		ExecContext(context.Context, string, ...any) (stdsql.Result, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("Driver.ExecContext is not supported")
+	}
+	return ex.ExecContext(ctx, query, args...)
+}
+
+// QueryContext allows calling the underlying QueryContext method of the driver if it is supported by it.
+// See, database/sql#DB.QueryContext for more information.
+func (c *config) QueryContext(ctx context.Context, query string, args ...any) (*stdsql.Rows, error) {
+	q, ok := c.driver.(interface {
+		QueryContext(context.Context, string, ...any) (*stdsql.Rows, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("Driver.QueryContext is not supported")
+	}
+	return q.QueryContext(ctx, query, args...)
+}

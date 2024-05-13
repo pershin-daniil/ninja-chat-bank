@@ -31,26 +31,6 @@ func (mu *MessageUpdate) Where(ps ...predicate.Message) *MessageUpdate {
 	return mu
 }
 
-// SetAuthorID sets the "author_id" field.
-func (mu *MessageUpdate) SetAuthorID(ti types.UserID) *MessageUpdate {
-	mu.mutation.SetAuthorID(ti)
-	return mu
-}
-
-// SetNillableAuthorID sets the "author_id" field if the given value is not nil.
-func (mu *MessageUpdate) SetNillableAuthorID(ti *types.UserID) *MessageUpdate {
-	if ti != nil {
-		mu.SetAuthorID(*ti)
-	}
-	return mu
-}
-
-// ClearAuthorID clears the value of the "author_id" field.
-func (mu *MessageUpdate) ClearAuthorID() *MessageUpdate {
-	mu.mutation.ClearAuthorID()
-	return mu
-}
-
 // SetChatID sets the "chat_id" field.
 func (mu *MessageUpdate) SetChatID(ti types.ChatID) *MessageUpdate {
 	mu.mutation.SetChatID(ti)
@@ -141,18 +121,9 @@ func (mu *MessageUpdate) SetNillableIsBlocked(b *bool) *MessageUpdate {
 	return mu
 }
 
-// SetIsService sets the "is_service" field.
-func (mu *MessageUpdate) SetIsService(b bool) *MessageUpdate {
-	mu.mutation.SetIsService(b)
-	return mu
-}
-
-// SetNillableIsService sets the "is_service" field if the given value is not nil.
-func (mu *MessageUpdate) SetNillableIsService(b *bool) *MessageUpdate {
-	if b != nil {
-		mu.SetIsService(*b)
-	}
-	return mu
+// SetChat sets the "chat" edge to the Chat entity.
+func (mu *MessageUpdate) SetChat(c *Chat) *MessageUpdate {
+	return mu.SetChatID(c.ID)
 }
 
 // SetProblem sets the "problem" edge to the Problem entity.
@@ -160,25 +131,20 @@ func (mu *MessageUpdate) SetProblem(p *Problem) *MessageUpdate {
 	return mu.SetProblemID(p.ID)
 }
 
-// SetChat sets the "chat" edge to the Chat entity.
-func (mu *MessageUpdate) SetChat(c *Chat) *MessageUpdate {
-	return mu.SetChatID(c.ID)
-}
-
 // Mutation returns the MessageMutation object of the builder.
 func (mu *MessageUpdate) Mutation() *MessageMutation {
 	return mu.mutation
 }
 
-// ClearProblem clears the "problem" edge to the Problem entity.
-func (mu *MessageUpdate) ClearProblem() *MessageUpdate {
-	mu.mutation.ClearProblem()
-	return mu
-}
-
 // ClearChat clears the "chat" edge to the Chat entity.
 func (mu *MessageUpdate) ClearChat() *MessageUpdate {
 	mu.mutation.ClearChat()
+	return mu
+}
+
+// ClearProblem clears the "problem" edge to the Problem entity.
+func (mu *MessageUpdate) ClearProblem() *MessageUpdate {
+	mu.mutation.ClearProblem()
 	return mu
 }
 
@@ -211,11 +177,6 @@ func (mu *MessageUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (mu *MessageUpdate) check() error {
-	if v, ok := mu.mutation.AuthorID(); ok {
-		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "author_id", err: fmt.Errorf(`store: validator failed for field "Message.author_id": %w`, err)}
-		}
-	}
 	if v, ok := mu.mutation.ChatID(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "chat_id", err: fmt.Errorf(`store: validator failed for field "Message.chat_id": %w`, err)}
@@ -226,11 +187,11 @@ func (mu *MessageUpdate) check() error {
 			return &ValidationError{Name: "problem_id", err: fmt.Errorf(`store: validator failed for field "Message.problem_id": %w`, err)}
 		}
 	}
-	if _, ok := mu.mutation.ProblemID(); mu.mutation.ProblemCleared() && !ok {
-		return errors.New(`store: clearing a required unique edge "Message.problem"`)
-	}
 	if _, ok := mu.mutation.ChatID(); mu.mutation.ChatCleared() && !ok {
 		return errors.New(`store: clearing a required unique edge "Message.chat"`)
+	}
+	if _, ok := mu.mutation.ProblemID(); mu.mutation.ProblemCleared() && !ok {
+		return errors.New(`store: clearing a required unique edge "Message.problem"`)
 	}
 	return nil
 }
@@ -246,9 +207,6 @@ func (mu *MessageUpdate) sqlSave(ctx context.Context) (n int, err error) {
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := mu.mutation.AuthorID(); ok {
-		_spec.SetField(message.FieldAuthorID, field.TypeUUID, value)
 	}
 	if mu.mutation.AuthorIDCleared() {
 		_spec.ClearField(message.FieldAuthorID, field.TypeUUID)
@@ -267,38 +225,6 @@ func (mu *MessageUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := mu.mutation.IsBlocked(); ok {
 		_spec.SetField(message.FieldIsBlocked, field.TypeBool, value)
-	}
-	if value, ok := mu.mutation.IsService(); ok {
-		_spec.SetField(message.FieldIsService, field.TypeBool, value)
-	}
-	if mu.mutation.ProblemCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   message.ProblemTable,
-			Columns: []string{message.ProblemColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeUUID),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := mu.mutation.ProblemIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   message.ProblemTable,
-			Columns: []string{message.ProblemColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeUUID),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if mu.mutation.ChatCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -329,6 +255,35 @@ func (mu *MessageUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if mu.mutation.ProblemCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   message.ProblemTable,
+			Columns: []string{message.ProblemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := mu.mutation.ProblemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   message.ProblemTable,
+			Columns: []string{message.ProblemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, mu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{message.Label}
@@ -347,26 +302,6 @@ type MessageUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *MessageMutation
-}
-
-// SetAuthorID sets the "author_id" field.
-func (muo *MessageUpdateOne) SetAuthorID(ti types.UserID) *MessageUpdateOne {
-	muo.mutation.SetAuthorID(ti)
-	return muo
-}
-
-// SetNillableAuthorID sets the "author_id" field if the given value is not nil.
-func (muo *MessageUpdateOne) SetNillableAuthorID(ti *types.UserID) *MessageUpdateOne {
-	if ti != nil {
-		muo.SetAuthorID(*ti)
-	}
-	return muo
-}
-
-// ClearAuthorID clears the value of the "author_id" field.
-func (muo *MessageUpdateOne) ClearAuthorID() *MessageUpdateOne {
-	muo.mutation.ClearAuthorID()
-	return muo
 }
 
 // SetChatID sets the "chat_id" field.
@@ -459,18 +394,9 @@ func (muo *MessageUpdateOne) SetNillableIsBlocked(b *bool) *MessageUpdateOne {
 	return muo
 }
 
-// SetIsService sets the "is_service" field.
-func (muo *MessageUpdateOne) SetIsService(b bool) *MessageUpdateOne {
-	muo.mutation.SetIsService(b)
-	return muo
-}
-
-// SetNillableIsService sets the "is_service" field if the given value is not nil.
-func (muo *MessageUpdateOne) SetNillableIsService(b *bool) *MessageUpdateOne {
-	if b != nil {
-		muo.SetIsService(*b)
-	}
-	return muo
+// SetChat sets the "chat" edge to the Chat entity.
+func (muo *MessageUpdateOne) SetChat(c *Chat) *MessageUpdateOne {
+	return muo.SetChatID(c.ID)
 }
 
 // SetProblem sets the "problem" edge to the Problem entity.
@@ -478,25 +404,20 @@ func (muo *MessageUpdateOne) SetProblem(p *Problem) *MessageUpdateOne {
 	return muo.SetProblemID(p.ID)
 }
 
-// SetChat sets the "chat" edge to the Chat entity.
-func (muo *MessageUpdateOne) SetChat(c *Chat) *MessageUpdateOne {
-	return muo.SetChatID(c.ID)
-}
-
 // Mutation returns the MessageMutation object of the builder.
 func (muo *MessageUpdateOne) Mutation() *MessageMutation {
 	return muo.mutation
 }
 
-// ClearProblem clears the "problem" edge to the Problem entity.
-func (muo *MessageUpdateOne) ClearProblem() *MessageUpdateOne {
-	muo.mutation.ClearProblem()
-	return muo
-}
-
 // ClearChat clears the "chat" edge to the Chat entity.
 func (muo *MessageUpdateOne) ClearChat() *MessageUpdateOne {
 	muo.mutation.ClearChat()
+	return muo
+}
+
+// ClearProblem clears the "problem" edge to the Problem entity.
+func (muo *MessageUpdateOne) ClearProblem() *MessageUpdateOne {
+	muo.mutation.ClearProblem()
 	return muo
 }
 
@@ -542,11 +463,6 @@ func (muo *MessageUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (muo *MessageUpdateOne) check() error {
-	if v, ok := muo.mutation.AuthorID(); ok {
-		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "author_id", err: fmt.Errorf(`store: validator failed for field "Message.author_id": %w`, err)}
-		}
-	}
 	if v, ok := muo.mutation.ChatID(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "chat_id", err: fmt.Errorf(`store: validator failed for field "Message.chat_id": %w`, err)}
@@ -557,11 +473,11 @@ func (muo *MessageUpdateOne) check() error {
 			return &ValidationError{Name: "problem_id", err: fmt.Errorf(`store: validator failed for field "Message.problem_id": %w`, err)}
 		}
 	}
-	if _, ok := muo.mutation.ProblemID(); muo.mutation.ProblemCleared() && !ok {
-		return errors.New(`store: clearing a required unique edge "Message.problem"`)
-	}
 	if _, ok := muo.mutation.ChatID(); muo.mutation.ChatCleared() && !ok {
 		return errors.New(`store: clearing a required unique edge "Message.chat"`)
+	}
+	if _, ok := muo.mutation.ProblemID(); muo.mutation.ProblemCleared() && !ok {
+		return errors.New(`store: clearing a required unique edge "Message.problem"`)
 	}
 	return nil
 }
@@ -595,9 +511,6 @@ func (muo *MessageUpdateOne) sqlSave(ctx context.Context) (_node *Message, err e
 			}
 		}
 	}
-	if value, ok := muo.mutation.AuthorID(); ok {
-		_spec.SetField(message.FieldAuthorID, field.TypeUUID, value)
-	}
 	if muo.mutation.AuthorIDCleared() {
 		_spec.ClearField(message.FieldAuthorID, field.TypeUUID)
 	}
@@ -615,38 +528,6 @@ func (muo *MessageUpdateOne) sqlSave(ctx context.Context) (_node *Message, err e
 	}
 	if value, ok := muo.mutation.IsBlocked(); ok {
 		_spec.SetField(message.FieldIsBlocked, field.TypeBool, value)
-	}
-	if value, ok := muo.mutation.IsService(); ok {
-		_spec.SetField(message.FieldIsService, field.TypeBool, value)
-	}
-	if muo.mutation.ProblemCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   message.ProblemTable,
-			Columns: []string{message.ProblemColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeUUID),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := muo.mutation.ProblemIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   message.ProblemTable,
-			Columns: []string{message.ProblemColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeUUID),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if muo.mutation.ChatCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -670,6 +551,35 @@ func (muo *MessageUpdateOne) sqlSave(ctx context.Context) (_node *Message, err e
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(chat.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if muo.mutation.ProblemCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   message.ProblemTable,
+			Columns: []string{message.ProblemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := muo.mutation.ProblemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   message.ProblemTable,
+			Columns: []string{message.ProblemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

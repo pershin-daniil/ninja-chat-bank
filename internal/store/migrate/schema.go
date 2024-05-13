@@ -3,6 +3,7 @@
 package migrate
 
 import (
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/dialect/sql/schema"
 	"entgo.io/ent/schema/field"
 )
@@ -49,18 +50,25 @@ var (
 		Name:       "jobs",
 		Columns:    JobsColumns,
 		PrimaryKey: []*schema.Column{JobsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "job_available_at_reserved_until",
+				Unique:  false,
+				Columns: []*schema.Column{JobsColumns[4], JobsColumns[5]},
+			},
+		},
 	}
 	// MessagesColumns holds the columns for the "messages" table.
 	MessagesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID, Unique: true},
 		{Name: "author_id", Type: field.TypeUUID, Nullable: true},
-		{Name: "initial_request_id", Type: field.TypeUUID, Unique: true},
 		{Name: "is_visible_for_client", Type: field.TypeBool, Default: false},
 		{Name: "is_visible_for_manager", Type: field.TypeBool, Default: false},
-		{Name: "body", Type: field.TypeString, Size: 2147483647},
+		{Name: "body", Type: field.TypeString, Size: 3000},
 		{Name: "checked_at", Type: field.TypeTime, Nullable: true},
 		{Name: "is_blocked", Type: field.TypeBool, Default: false},
 		{Name: "is_service", Type: field.TypeBool, Default: false},
+		{Name: "initial_request_id", Type: field.TypeUUID, Unique: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "chat_id", Type: field.TypeUUID},
 		{Name: "problem_id", Type: field.TypeUUID},
@@ -86,14 +94,15 @@ var (
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "message_chat_id",
+				Name:    "message_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{MessagesColumns[10]},
-			},
-			{
-				Name:    "message_created_at_is_visible_for_client",
-				Unique:  false,
-				Columns: []*schema.Column{MessagesColumns[9], MessagesColumns[3]},
+				Columns: []*schema.Column{MessagesColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						MessagesColumns[9].Name: true,
+					},
+					Type: "BTREE",
+				},
 			},
 		},
 	}

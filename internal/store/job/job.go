@@ -60,6 +60,8 @@ var (
 	DefaultAttempts int
 	// AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
 	AttemptsValidator func(int) error
+	// DefaultAvailableAt holds the default value on creation for the "available_at" field.
+	DefaultAvailableAt func() time.Time
 	// DefaultReservedUntil holds the default value on creation for the "reserved_until" field.
 	DefaultReservedUntil func() time.Time
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.

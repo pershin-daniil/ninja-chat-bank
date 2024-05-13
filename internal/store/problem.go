@@ -35,22 +35,13 @@ type Problem struct {
 
 // ProblemEdges holds the relations/edges for other nodes in the graph.
 type ProblemEdges struct {
-	// Messages holds the value of the messages edge.
-	Messages []*Message `json:"messages,omitempty"`
 	// Chat holds the value of the chat edge.
 	Chat *Chat `json:"chat,omitempty"`
+	// Messages holds the value of the messages edge.
+	Messages []*Message `json:"messages,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [2]bool
-}
-
-// MessagesOrErr returns the Messages value or an error if the edge
-// was not loaded in eager-loading.
-func (e ProblemEdges) MessagesOrErr() ([]*Message, error) {
-	if e.loadedTypes[0] {
-		return e.Messages, nil
-	}
-	return nil, &NotLoadedError{edge: "messages"}
 }
 
 // ChatOrErr returns the Chat value or an error if the edge
@@ -58,10 +49,19 @@ func (e ProblemEdges) MessagesOrErr() ([]*Message, error) {
 func (e ProblemEdges) ChatOrErr() (*Chat, error) {
 	if e.Chat != nil {
 		return e.Chat, nil
-	} else if e.loadedTypes[1] {
+	} else if e.loadedTypes[0] {
 		return nil, &NotFoundError{label: chat.Label}
 	}
 	return nil, &NotLoadedError{edge: "chat"}
+}
+
+// MessagesOrErr returns the Messages value or an error if the edge
+// was not loaded in eager-loading.
+func (e ProblemEdges) MessagesOrErr() ([]*Message, error) {
+	if e.loadedTypes[1] {
+		return e.Messages, nil
+	}
+	return nil, &NotLoadedError{edge: "messages"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -135,14 +135,14 @@ func (pr *Problem) Value(name string) (ent.Value, error) {
 	return pr.selectValues.Get(name)
 }
 
-// QueryMessages queries the "messages" edge of the Problem entity.
-func (pr *Problem) QueryMessages() *MessageQuery {
-	return NewProblemClient(pr.config).QueryMessages(pr)
-}
-
 // QueryChat queries the "chat" edge of the Problem entity.
 func (pr *Problem) QueryChat() *ChatQuery {
 	return NewProblemClient(pr.config).QueryChat(pr)
+}
+
+// QueryMessages queries the "messages" edge of the Problem entity.
+func (pr *Problem) QueryMessages() *MessageQuery {
+	return NewProblemClient(pr.config).QueryMessages(pr)
 }
 
 // Update returns a builder for updating this Problem.
