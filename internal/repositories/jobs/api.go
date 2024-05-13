@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	entsql "entgo.io/ent/dialect/sql"
+	"go.uber.org/zap"
 
-	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
-	"github.com/pershin-daniil/ninja-chat-bank/internal/store/job"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 )
 
@@ -23,37 +21,42 @@ type Job struct {
 }
 
 func (r *Repo) FindAndReserveJob(ctx context.Context, until time.Time) (Job, error) {
-	var j Job
+	query := `
+	with cte as (
+		select "id" from "jobs"
+		where "available_at" <= now()
+			and "reserved_until" <= now()
+		limit 1 for update skip locked
+	)
+	update "jobs" as "j"
+	set "attempts" = "attempts" + 1, "reserved_until" = $1
+	from cte
+	where "cte"."id" = "j"."id" returning
+		"j".id,
+		"j".name,
+		"j".payload,
+		"j".attempts;`
 
-	err := r.db.RunInTx(ctx, func(ctx context.Context) error {
-		foundJob, err := r.db.Job(ctx).Query().Where(job.And(
-			job.AvailableAtLT(time.Now()),
-			job.ReservedUntilLT(time.Now()),
-		)).Order(job.ByReservedUntil(entsql.OrderNullsFirst())).ForUpdate().First(ctx)
-
-		switch {
-		case store.IsNotFound(err):
-			return fmt.Errorf("%w: %v", ErrNoJobs, err)
-		case err != nil:
-			return fmt.Errorf("failed to get job: %v", err)
-		}
-
-		foundJob, err = r.db.Job(ctx).UpdateOne(foundJob).SetReservedUntil(until).AddAttempts(1).Save(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to update job: %v", err)
-		}
-
-		j = Job{
-			ID:       foundJob.ID,
-			Name:     foundJob.Name,
-			Payload:  foundJob.Payload,
-			Attempts: foundJob.Attempts,
-		}
-
-		return nil
-	})
+	rows, err := r.db.Job(ctx).QueryContext(ctx, query, until)
 	if err != nil {
-		return Job{}, fmt.Errorf("failed to run in tx: %w", err)
+		return Job{}, fmt.Errorf("query context: %w", err)
+	}
+	defer func() {
+		if e := rows.Close(); e != nil {
+			zap.L().Warn("failed to close rows", zap.Error(e))
+		}
+	}()
+
+	if !rows.Next() {
+		if err = rows.Err(); err != nil {
+			return Job{}, fmt.Errorf("rows err: %v", err)
+		}
+		return Job{}, ErrNoJobs
+	}
+
+	var j Job
+	if err = rows.Scan(&j.ID, &j.Name, &j.Payload, &j.Attempts); err != nil {
+		return Job{}, fmt.Errorf("scan job: %v", err)
 	}
 
 	return j, nil
@@ -67,29 +70,20 @@ func (r *Repo) CreateJob(ctx context.Context, name, payload string, availableAt 
 		SetAvailableAt(availableAt).
 		Save(ctx)
 	if err != nil {
-		return types.JobIDNil, fmt.Errorf("failed to create a job: %v", err)
+		return types.JobIDNil, fmt.Errorf("create a job: %v", err)
 	}
 
 	return j.ID, nil
 }
 
 func (r *Repo) CreateFailedJob(ctx context.Context, name, payload, reason string) error {
-	_, err := r.db.FailedJob(ctx).Create().
+	return r.db.FailedJob(ctx).Create().
 		SetName(name).
 		SetPayload(payload).
 		SetReason(reason).
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create a failed job: %v", err)
-	}
-
-	return nil
+		Exec(ctx)
 }
 
 func (r *Repo) DeleteJob(ctx context.Context, jobID types.JobID) (err error) {
-	if err = r.db.Job(ctx).DeleteOneID(jobID).Exec(ctx); err != nil {
-		return fmt.Errorf("failed to delete job: %v", err)
-	}
-
-	return nil
+	return r.db.Job(ctx).DeleteOneID(jobID).Exec(ctx)
 }
