@@ -26,22 +26,32 @@ type messageRepository interface {
 
 //go:generate options-gen -out-filename=job_options.gen.go -from-struct=Options
 type Options struct {
-	messageProducer   messageProducer   `option:"mandatory"`
-	messageRepository messageRepository `option:"mandatory"`
+	msgProducer messageProducer   `option:"mandatory" validate:"required"`
+	msgRepo     messageRepository `option:"mandatory" validate:"required"`
 }
 
 type Job struct {
 	outbox.DefaultJob
 	Options
+	logger *zap.Logger
+}
+
+func Must(opts Options) *Job {
+	j, err := New(opts)
+	if err != nil {
+		panic(err)
+	}
+	return j
 }
 
 func New(opts Options) (*Job, error) {
 	if err := opts.Validate(); err != nil {
-		return nil, fmt.Errorf("failed to validate options sendclientmessagejob: %v", err)
+		return nil, fmt.Errorf("validate options: %v", err)
 	}
 
 	return &Job{
 		Options: opts,
+		logger:  zap.L().Named("job." + Name),
 	}, nil
 }
 
@@ -52,28 +62,27 @@ func (j *Job) Name() string {
 func (j *Job) Handle(ctx context.Context, payload string) (err error) {
 	defer func() {
 		if err != nil {
-			zap.L().With(zap.String("payload", payload), zap.Error(err)).Info("failed")
+			j.logger.With(zap.String("payload", payload), zap.Error(err)).Info("failed")
 		}
 	}()
 
-	msgID, err := types.Parse[types.MessageID](payload)
+	p, err := unmarshalPayload(payload)
 	if err != nil {
-		return fmt.Errorf("failed to parse payload: %v", err)
+		return fmt.Errorf("unmarshal payload: %v", err)
 	}
 
-	msg, err := j.messageRepository.GetMessageByID(ctx, msgID)
+	msg, err := j.msgRepo.GetMessageByID(ctx, p.MessageID)
 	if err != nil {
-		return fmt.Errorf("failed to get message by id: %v", err)
+		return fmt.Errorf("get message: %v", err)
 	}
 
-	err = j.messageProducer.ProduceMessage(ctx, msgproducer.Message{
+	if err = j.msgProducer.ProduceMessage(ctx, msgproducer.Message{
 		ID:         msg.ID,
 		ChatID:     msg.ChatID,
 		Body:       msg.Body,
 		FromClient: !msg.AuthorID.IsZero(),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to produce message: %v", err)
+	}); err != nil {
+		return fmt.Errorf("roduce message to queue: %v", err)
 	}
 
 	return nil

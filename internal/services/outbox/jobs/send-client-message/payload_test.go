@@ -17,13 +17,6 @@ func TestMarshalPayload_Smoke(t *testing.T) {
 		assert.NotEmpty(t, p)
 	})
 
-	t.Run("one more valid input", func(t *testing.T) {
-		msgID := types.NewMessageID()
-		p, err := sendclientmessagejob.MarshalPayload(msgID)
-		require.NoError(t, err)
-		assert.Equal(t, msgID.String(), p)
-	})
-
 	t.Run("invalid input", func(t *testing.T) {
 		p, err := sendclientmessagejob.MarshalPayload(types.MessageIDNil)
 		require.Error(t, err)

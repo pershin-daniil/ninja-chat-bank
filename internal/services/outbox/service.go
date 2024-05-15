@@ -13,14 +13,7 @@ import (
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 )
 
-const (
-	serviceName = "outbox"
-
-	reasonJobNotRegistered       = "not_registered"
-	reasonMaxJobAttemptsExceeded = "attempts_exceeded"
-)
-
-var ErrJobAlreadyExists = errors.New("job already exists")
+const serviceName = "outbox"
 
 type jobsRepository interface {
 	CreateJob(ctx context.Context, name, payload string, availableAt time.Time) (types.JobID, error)
@@ -30,25 +23,22 @@ type jobsRepository interface {
 }
 
 type transactor interface {
-	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+	RunInTx(ctx context.Context, f func(ctx context.Context) error) error
 }
 
 //go:generate options-gen -out-filename=service_options.gen.go -from-struct=Options
 type Options struct {
-	workers    int            `option:"mandatory" validate:"min=1,max=32"`
-	idleTime   time.Duration  `option:"mandatory" validate:"min=100ms,max=10s"`
-	reserveFor time.Duration  `option:"mandatory" validate:"min=1s,max=10m"`
-	jobsRepo   jobsRepository `option:"mandatory"`
-	db         transactor     `option:"mandatory"`
+	workers    int           `option:"mandatory" validate:"min=1,max=32"`
+	idleTime   time.Duration `option:"mandatory" validate:"min=100ms,max=10s"`
+	reserveFor time.Duration `option:"mandatory" validate:"min=1s,max=10m"`
+
+	jobsRepo jobsRepository `option:"mandatory"`
+	txtor    transactor     `option:"mandatory"`
 }
 
 type Service struct {
-	workers    int
-	idleTime   time.Duration
-	reserveFor time.Duration
-	jobsRepo   jobsRepository
-	db         transactor
-	registry   map[string]Job
+	Options
+	jobs map[string]Job
 }
 
 func New(opts Options) (*Service, error) {
@@ -57,28 +47,24 @@ func New(opts Options) (*Service, error) {
 	}
 
 	return &Service{
-		workers:    opts.workers,
-		idleTime:   opts.idleTime,
-		reserveFor: opts.reserveFor,
-		jobsRepo:   opts.jobsRepo,
-		db:         opts.db,
-		registry:   make(map[string]Job),
+		Options: opts,
+		jobs:    map[string]Job{},
 	}, nil
 }
 
 func (s *Service) RegisterJob(job Job) error {
-	if _, ok := s.registry[job.Name()]; ok {
-		return ErrJobAlreadyExists
+	if _, ok := s.jobs[job.Name()]; ok {
+		return fmt.Errorf("job %q already registered", job.Name())
 	}
 
-	s.registry[job.Name()] = job
+	s.jobs[job.Name()] = job
 
 	return nil
 }
 
 func (s *Service) MustRegisterJob(job Job) {
 	if err := s.RegisterJob(job); err != nil {
-		panic(err)
+		panic(fmt.Errorf("register job: %v", err))
 	}
 }
 
@@ -86,16 +72,16 @@ func (s *Service) Run(ctx context.Context) error {
 	eg, ctx := errgroup.WithContext(ctx)
 
 	for i := 0; i < s.workers; i++ {
-		lg := zap.L().With(zap.String("service", serviceName), zap.Int("worker_id", i+1))
+		logger := zap.L().With(zap.String("service", serviceName), zap.Int("worker_id", i+1))
 
 		eg.Go(func() error {
 			for {
-				if err := s.executeAvailableJobs(ctx, lg); err != nil {
+				// Process all available jobs in one go.
+				if err := s.processAvailableJobs(ctx, logger); err != nil {
 					if ctx.Err() != nil {
-						return err
+						return nil //nolint:nilerr // graceful exit
 					}
-
-					lg.Warn("execute error", zap.Error(err))
+					logger.Warn("process jobs error", zap.Error(err))
 					return err
 				}
 
@@ -111,7 +97,7 @@ func (s *Service) Run(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func (s *Service) executeAvailableJobs(ctx context.Context, lg *zap.Logger) error {
+func (s *Service) processAvailableJobs(ctx context.Context, logger *zap.Logger) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -119,9 +105,9 @@ func (s *Service) executeAvailableJobs(ctx context.Context, lg *zap.Logger) erro
 		default:
 		}
 
-		if err := s.execute(ctx, lg); err != nil {
+		if err := s.findAndProcessJob(ctx, logger); err != nil {
 			if errors.Is(err, jobsrepo.ErrNoJobs) {
-				lg.Debug("no jobs", zap.Error(err))
+				logger.Debug("no jobs found to process")
 				return nil
 			}
 
@@ -130,57 +116,63 @@ func (s *Service) executeAvailableJobs(ctx context.Context, lg *zap.Logger) erro
 	}
 }
 
-func (s *Service) execute(ctx context.Context, lg *zap.Logger) error {
-	task, err := s.jobsRepo.FindAndReserveJob(ctx, time.Now().Add(s.reserveFor))
+func (s *Service) findAndProcessJob(ctx context.Context, log *zap.Logger) error {
+	job, err := s.jobsRepo.FindAndReserveJob(ctx, time.Now().Add(s.reserveFor))
 	if err != nil {
-		return fmt.Errorf("failed to find and reserve job: %w", err)
+		return fmt.Errorf("find and reserve job: %w", err)
 	}
 
-	l := lg.With(
-		zap.String("job_name", task.Name),
-		zap.Stringer("job_id", task.ID),
-		zap.String("payload", task.Payload),
-		zap.Int("attempts", task.Attempts))
-	l.Info("executing task")
+	log = log.With(
+		zap.String("job_name", job.Name),
+		zap.Stringer("job_id", job.ID),
+		zap.Int("attempt_number", job.Attempts))
 
-	job, ok := s.registry[task.Name]
+	j, ok := s.jobs[job.Name]
 	if !ok {
-		return s.dlq(ctx, task, reasonJobNotRegistered)
+		log.Warn("drop to dlq: job is not registered")
+		return s.dlq(ctx, job.ID, job.Name, job.Payload, "unknown job")
 	}
 
 	func() {
-		c, cancel := context.WithTimeout(ctx, job.ExecutionTimeout())
+		c, cancel := context.WithTimeout(ctx, j.ExecutionTimeout())
 		defer cancel()
 
-		err = job.Handle(c, task.Payload)
+		err = j.Handle(c, job.Payload)
 	}()
 
 	if err != nil {
-		l.Warn("failed to handle job", zap.Error(err))
+		log.Warn("handle job error", zap.Error(err))
 
-		if task.Attempts >= job.MaxAttempts() {
-			return s.dlq(ctx, task, reasonMaxJobAttemptsExceeded)
+		if job.Attempts >= j.MaxAttempts() {
+			log.Warn("drop to dlq: job max attempts exceeded")
+			return s.dlq(
+				ctx,
+				job.ID,
+				job.Name,
+				job.Payload,
+				fmt.Sprintf("max attempts exceeded: %v", err),
+			)
 		}
 
 		return nil
 	}
 
-	// Delete job with context.Background() to prevent handling a job when ctx is already closed.
-	if err = s.jobsRepo.DeleteJob(ctx, task.ID); err != nil {
-		l.Warn("failed to delete job", zap.Error(err))
+	//nolint:contextcheck // Delete job with context.Background() to prevent handling a job when ctx is already closed.
+	if err = s.jobsRepo.DeleteJob(context.Background(), job.ID); err != nil {
+		log.Warn("delete job error", zap.Error(err))
 	}
 
 	return nil
 }
 
-func (s *Service) dlq(ctx context.Context, task jobsrepo.Job, reason string) error {
-	return s.db.RunInTx(ctx, func(ctx context.Context) error {
-		if err := s.jobsRepo.CreateFailedJob(ctx, task.Name, task.Payload, reason); err != nil {
-			return fmt.Errorf("failed to create failed job: %v", err)
+func (s *Service) dlq(ctx context.Context, jobID types.JobID, name, payload, reason string) error {
+	return s.txtor.RunInTx(ctx, func(ctx context.Context) error {
+		if err := s.jobsRepo.CreateFailedJob(ctx, name, payload, reason); err != nil {
+			return fmt.Errorf("create failed job: %v", err)
 		}
 
-		if err := s.jobsRepo.DeleteJob(ctx, task.ID); err != nil {
-			return fmt.Errorf("failed to delete job in dlq: %v", err)
+		if err := s.jobsRepo.DeleteJob(ctx, jobID); err != nil {
+			return fmt.Errorf("delete job: %v", err)
 		}
 
 		return nil

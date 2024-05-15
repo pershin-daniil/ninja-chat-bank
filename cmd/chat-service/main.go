@@ -52,11 +52,22 @@ func run() (errReturned error) {
 	if err = logger.Init(logger.NewOptions(
 		cfg.Log.Level,
 		logger.WithProductionMode(cfg.IsProduction()),
-		logger.WithSentryDNS(cfg.Sentry.DSN),
+		logger.WithSentryDSN(cfg.Sentry.DSN),
+		logger.WithSentryEnv(cfg.Global.Env),
 	)); err != nil {
 		return fmt.Errorf("failed to init logger: %v", err)
 	}
 	defer logger.Sync()
+
+	lg := zap.L().Named("main")
+
+	// Storage.
+	var storage *store.Client
+	{
+		switch s := cfg.Stores.Use; s {
+
+		}
+	}
 
 	clientSwagger, err := clientv1.GetSwagger()
 	if err != nil {
@@ -98,7 +109,7 @@ func run() (errReturned error) {
 	}
 	defer func() {
 		if e := psqlClient.Close(); e != nil {
-			zap.L().Warn("failed to close psqlClient: %v", zap.Error(e))
+			zap.L().Warn("failed to close psqlClient", zap.Error(e))
 		}
 	}()
 

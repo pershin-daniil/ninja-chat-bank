@@ -27,9 +27,9 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
     volumes:
-      - ./:/opt/keycloak/data/import
+      - ./bank-realm.json:/opt/keycloak/data/import/bank-realm.json
     ports:
-      - "3010:8080"
+      - "127.0.0.1:3010:8080"
 
   zookeeper:
     image: zookeeper:3.8.0

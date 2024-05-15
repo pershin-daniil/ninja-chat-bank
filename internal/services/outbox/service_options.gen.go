@@ -16,7 +16,7 @@ func NewOptions(
 	idleTime time.Duration,
 	reserveFor time.Duration,
 	jobsRepo jobsRepository,
-	db transactor,
+	txtor transactor,
 	options ...OptOptionsSetter,
 ) Options {
 	o := Options{}
@@ -27,7 +27,7 @@ func NewOptions(
 	o.idleTime = idleTime
 	o.reserveFor = reserveFor
 	o.jobsRepo = jobsRepo
-	o.db = db
+	o.txtor = txtor
 
 	for _, opt := range options {
 		opt(&o)

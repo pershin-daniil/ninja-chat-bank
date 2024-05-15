@@ -7,12 +7,14 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/TheZeroSlave/zapsentry"
+	"github.com/tchap/zapext/v2/zapsentry"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/buildinfo"
 )
+
+const sentryLvl = zapcore.WarnLevel
 
 var Level zap.AtomicLevel
 
@@ -20,8 +22,8 @@ var Level zap.AtomicLevel
 type Options struct {
 	level          string `option:"mandatory" validate:"required,oneof=debug info warn error"`
 	productionMode bool
-	sentryDNS      string
-	env            string
+	sentryDSN      string `validate:"omitempty,url"`
+	sentryEnv      string `validate:"omitempty,oneof=dev stage prod"`
 }
 
 func MustInit(opts Options) {
@@ -59,27 +61,22 @@ func Init(opts Options) error {
 		zapcore.NewCore(encoder, os.Stdout, Level),
 	}
 
-	if opts.sentryDNS != "" {
-		cfg := zapsentry.Configuration{
-			Level: zapcore.WarnLevel,
+	if dsn := opts.sentryDSN; dsn != "" {
+		env := "dev"
+		if opts.productionMode {
+			env = "prod"
 		}
 
-		client, e := NewSentryClient(opts.sentryDNS, opts.env, buildinfo.BuildInfo.Main.Version)
+		sentryClient, e := NewSentryClient(dsn, env, buildinfo.Version())
 		if e != nil {
-			return fmt.Errorf("failed to create new sentry client: %v", e)
+			return fmt.Errorf("new sentry client: %v", e)
 		}
 
-		core, e := zapsentry.NewCore(cfg, zapsentry.NewSentryClientFromClient(client))
-		if e != nil {
-			return fmt.Errorf("failed to create new zapsentry core: %v", e)
-		}
-
-		cores = append(cores, core)
+		cores = append(cores, zapsentry.NewCore(sentryLvl, sentryClient))
 	}
 
 	l := zap.New(zapcore.NewTee(cores...))
 	zap.ReplaceGlobals(l)
-	l.With(zapsentry.NewScope())
 
 	return nil
 }

@@ -5,7 +5,6 @@ go 1.22.0
 require (
 	entgo.io/ent v0.13.1
 	github.com/BurntSushi/toml v1.3.2
-	github.com/TheZeroSlave/zapsentry v1.20.2
 	github.com/brianvoe/gofakeit/v7 v7.0.2
 	github.com/getkin/kin-openapi v0.123.0
 	github.com/getsentry/sentry-go v0.20.0
@@ -25,6 +24,7 @@ require (
 	github.com/onsi/gomega v1.33.0
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/stretchr/testify v1.9.0
+	github.com/tchap/zapext/v2 v2.1.1
 	go.uber.org/goleak v1.3.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/sync v0.6.0
@@ -63,6 +63,7 @@ require (
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
