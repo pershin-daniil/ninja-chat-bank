@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"ariga.io/atlas/schemahcl"
+	"ariga.io/atlas/sql/internal/specutil"
 	"ariga.io/atlas/sql/internal/sqlx"
 	"ariga.io/atlas/sql/postgres/internal/postgresop"
 	"ariga.io/atlas/sql/schema"
@@ -28,7 +29,12 @@ type inspect struct{ *conn }
 var _ schema.Inspector = (*inspect)(nil)
 
 // InspectRealm returns schema descriptions of all resources in the given realm.
-func (i *inspect) InspectRealm(ctx context.Context, opts *schema.InspectRealmOption) (*schema.Realm, error) {
+func (i *inspect) InspectRealm(ctx context.Context, opts *schema.InspectRealmOption) (_ *schema.Realm, rerr error) {
+	undo, err := i.noSearchPath(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { rerr = errors.Join(rerr, undo()) }()
 	schemas, err := i.schemas(ctx, opts)
 	if err != nil {
 		return nil, err
@@ -41,6 +47,14 @@ func (i *inspect) InspectRealm(ctx context.Context, opts *schema.InspectRealmOpt
 		mode = sqlx.ModeInspectRealm(opts)
 	)
 	if len(schemas) > 0 {
+		if err := i.inspectEnums(ctx, r); err != nil {
+			return nil, err
+		}
+		if mode.Is(schema.InspectTypes) {
+			if err := i.inspectTypes(ctx, r, nil); err != nil {
+				return nil, err
+			}
+		}
 		if mode.Is(schema.InspectTables) {
 			if err := i.inspectTables(ctx, r, nil); err != nil {
 				return nil, err
@@ -57,16 +71,11 @@ func (i *inspect) InspectRealm(ctx context.Context, opts *schema.InspectRealmOpt
 				return nil, err
 			}
 		}
-		if err := i.inspectEnums(ctx, r); err != nil {
-			return nil, err
-		}
-		if mode.Is(schema.InspectTypes) {
-			if err := i.inspectTypes(ctx, r, nil); err != nil {
-				return nil, err
-			}
-		}
 		if mode.Is(schema.InspectObjects) {
 			if err := i.inspectSequences(ctx, r, nil); err != nil {
+				return nil, err
+			}
+			if err := i.inspectRealmObjects(ctx, r, nil); err != nil {
 				return nil, err
 			}
 		}
@@ -80,6 +89,34 @@ func (i *inspect) InspectRealm(ctx context.Context, opts *schema.InspectRealmOpt
 		}
 	}
 	return schema.ExcludeRealm(r, opts.Exclude)
+}
+
+// noSearchPath ensures the session search_path is clean when inspecting realms to ensures all
+// referenced objects in the public schema (or any other default search_path) are returned
+// qualified in the inspection.
+func (i *inspect) noSearchPath(ctx context.Context) (func() error, error) {
+	if i.crdb {
+		// Skip logic for CockroachDB.
+		return func() error { return nil }, nil
+	}
+	rows, err := i.QueryContext(ctx, "SELECT current_setting('search_path'), set_config('search_path', '', false)")
+	if err != nil {
+		return nil, err
+	}
+	var prev sql.NullString
+	if err := sqlx.ScanOne(rows, &prev, &sql.NullString{}); err != nil {
+		return nil, err
+	}
+	return func() error {
+		if sqlx.ValidString(prev) {
+			rows, err := i.QueryContext(ctx, "SELECT set_config('search_path', $1, false)", prev.String)
+			if err != nil {
+				return err
+			}
+			return rows.Close()
+		}
+		return nil
+	}, nil
 }
 
 // InspectSchema returns schema descriptions of the tables in the given schema.
@@ -106,6 +143,14 @@ func (i *inspect) InspectSchema(ctx context.Context, name string, opts *schema.I
 		r    = schema.NewRealm(schemas...)
 		mode = sqlx.ModeInspectSchema(opts)
 	)
+	if err := i.inspectEnums(ctx, r); err != nil {
+		return nil, err
+	}
+	if mode.Is(schema.InspectTypes) {
+		if err := i.inspectTypes(ctx, r, opts); err != nil {
+			return nil, err
+		}
+	}
 	if mode.Is(schema.InspectTables) {
 		if err := i.inspectTables(ctx, r, opts); err != nil {
 			return nil, err
@@ -119,14 +164,6 @@ func (i *inspect) InspectSchema(ctx context.Context, name string, opts *schema.I
 	}
 	if mode.Is(schema.InspectFuncs) {
 		if err := i.inspectFuncs(ctx, r, opts); err != nil {
-			return nil, err
-		}
-	}
-	if err := i.inspectEnums(ctx, r); err != nil {
-		return nil, err
-	}
-	if mode.Is(schema.InspectTypes) {
-		if err := i.inspectTypes(ctx, r, opts); err != nil {
 			return nil, err
 		}
 	}
@@ -249,12 +286,12 @@ func (i *inspect) columns(ctx context.Context, s *schema.Schema) error {
 // addColumn scans the current row and adds a new column from it to the scope (table or view).
 func (i *inspect) addColumn(s *schema.Schema, rows *sql.Rows) (err error) {
 	var (
-		typid, typelem, maxlen, precision, timeprecision, scale, seqstart, seqinc, seqlast                                                  sql.NullInt64
-		table, name, typ, fmtype, nullable, defaults, identity, genidentity, genexpr, charset, collate, comment, typtype, elemtyp, interval sql.NullString
+		typid, typelem, maxlen, precision, timeprecision, scale, seqstart, seqinc, seqlast                                         sql.NullInt64
+		table, name, typ, fmtype, nullable, defaults, identity, genidentity, genexpr, charset, collate, comment, typtype, interval sql.NullString
 	)
 	if err = rows.Scan(
 		&table, &name, &typ, &fmtype, &nullable, &defaults, &maxlen, &precision, &timeprecision, &scale, &interval, &charset,
-		&collate, &identity, &seqstart, &seqinc, &seqlast, &genidentity, &genexpr, &comment, &typtype, &typelem, &elemtyp, &typid,
+		&collate, &identity, &seqstart, &seqinc, &seqlast, &genidentity, &genexpr, &comment, &typtype, &typelem, &typid,
 	); err != nil {
 		return err
 	}
@@ -282,12 +319,23 @@ func (i *inspect) addColumn(s *schema.Schema, rows *sql.Rows) (err error) {
 		scale:         scale.Int64,
 		typtype:       typtype.String,
 		typelem:       typelem.Int64,
-		elemtyp:       elemtyp.String,
 		typid:         typid.Int64,
 		interval:      interval.String,
 		precision:     precision.Int64,
 		timePrecision: &timeprecision.Int64,
 	})
+	switch tt := c.Type.Type.(type) {
+	case *ArrayType:
+		if u, ok := tt.Underlying().(*UserDefinedType); ok {
+			tt.Type = i.underlyingType(s, u)
+		}
+	case *UserDefinedType:
+		ut := i.underlyingType(s, tt)
+		if ut != tt {
+			c.Type.Raw = tt.T
+			c.Type.Type = ut
+		}
+	}
 	if defaults.Valid {
 		columnDefault(c, defaults.String)
 	}
@@ -319,43 +367,72 @@ func (i *inspect) addColumn(s *schema.Schema, rows *sql.Rows) (err error) {
 	return nil
 }
 
+// parseType is like ParseType, but aware of the Realm state.
+func (i *inspect) parseType(ns *schema.Schema, s string) (schema.Type, error) {
+	t, err := ParseType(s)
+	if err != nil {
+		return nil, err
+	}
+	switch tt := t.(type) {
+	case *ArrayType:
+		if u, ok := tt.Underlying().(*UserDefinedType); ok {
+			tt.Type = i.underlyingType(ns, u)
+		}
+	case *UserDefinedType:
+		t = i.underlyingType(ns, tt)
+	}
+	return t, nil
+}
+
+// underlyingType returns the underlying type of the given user-defined
+// type by searching the realm.
+func (i *inspect) underlyingType(s *schema.Schema, u *UserDefinedType) schema.Type {
+	var (
+		sr       []*schema.Schema
+		ns, name = parseFmtType(u.T)
+	)
+	switch nsScope := i.schema != ""; {
+	// If the scope is one schema, the namespace defined
+	// on the type because it resides on a different schema.
+	case ns == "":
+		if !nsScope && s.Realm != nil {
+			// Search in the "public" schema first, because in the default
+			// configuration unqualified types refer to the public schema.
+			if s1, ok := s.Realm.Schema("public"); ok {
+				sr = append(sr, s1)
+			}
+		}
+		sr = append(sr, s)
+	// Allow searching in other schemas, only if
+	// we are not in a schema scope.
+	case ns != "" && !nsScope && s.Realm != nil:
+		if s1, ok := s.Realm.Schema(ns); ok {
+			sr = []*schema.Schema{s1}
+		}
+	}
+	for _, s := range sr {
+		for _, o := range s.Objects {
+			if e, ok := o.(*schema.EnumType); ok && e.T == name {
+				return e
+			} else if d, ok := o.(*DomainType); ok && d.T == name {
+				return d
+			} else if c, ok := o.(*CompositeType); ok && c.T == name {
+				return c
+			}
+		}
+	}
+	// No match.
+	return u
+}
+
 // enumValues fills enum columns with their values from the database.
 func (i *inspect) inspectEnums(ctx context.Context, r *schema.Realm) error {
 	var (
 		ids  = make(map[int64]*schema.EnumType)
 		args = make([]any, 0, len(r.Schemas))
-		newE = func(e1 *enumType) *schema.EnumType {
-			e2, ok := ids[e1.ID]
-			if ok {
-				return e2
-			}
-			e2 = &schema.EnumType{T: e1.T}
-			ids[e1.ID] = e2
-			return e2
-		}
-		scanC = func(cs []*schema.Column) {
-			for _, c := range cs {
-				switch t := c.Type.Type.(type) {
-				case *enumType:
-					e := newE(t)
-					c.Type.Type = e
-					c.Type.Raw = e.T
-				case *ArrayType:
-					if e, ok := t.Type.(*enumType); ok {
-						t.Type = newE(e)
-					}
-				}
-			}
-		}
 	)
 	for _, s := range r.Schemas {
 		args = append(args, s.Name)
-		for _, t := range s.Tables {
-			scanC(t.Columns)
-		}
-		for _, v := range s.Views {
-			scanC(v.Columns)
-		}
 	}
 	if len(args) == 0 {
 		return nil
@@ -456,13 +533,13 @@ func (i *inspect) addIndexes(s *schema.Schema, rows *sql.Rows, scope queryScope)
 	names := make(map[string]*schema.Index)
 	for rows.Next() {
 		var (
-			table, name, typ                                                      string
-			uniq, primary, included, nullsnotdistinct                             bool
-			desc, nullsfirst, nullslast, opcdefault                               sql.NullBool
-			column, constraints, pred, expr, comment, options, opcname, opcparams sql.NullString
+			table, name, typ                                                              string
+			uniq, primary, included, nullsnotdistinct                                     bool
+			desc, nullsfirst, nullslast, opcdefault                                       sql.NullBool
+			column, constraints, pred, expr, comment, options, opcname, opcparams, exoper sql.NullString
 		)
 		if err := rows.Scan(
-			&table, &name, &typ, &column, &included, &primary, &uniq, &constraints, &pred, &expr, &desc,
+			&table, &name, &typ, &column, &included, &primary, &uniq, &exoper, &constraints, &pred, &expr, &desc,
 			&nullsfirst, &nullslast, &comment, &options, &opcname, &opcdefault, &opcparams, &nullsnotdistinct,
 		); err != nil {
 			return fmt.Errorf("postgres: scanning indexes for schema %q: %w", s.Name, err)
@@ -521,6 +598,9 @@ func (i *inspect) addIndexes(s *schema.Schema, rows *sql.Rows, scope queryScope)
 				NullsFirst: nullsfirst.Bool,
 				NullsLast:  nullslast.Bool,
 			})
+		}
+		if sqlx.ValidString(exoper) {
+			part.AddAttrs(NewOperator(i.schema, exoper.String))
 		}
 		switch {
 		case included:
@@ -645,7 +725,8 @@ func (i *inspect) checks(ctx context.Context, s *schema.Schema) error {
 
 // addChecks scans the rows and adds the checks to the table.
 func (i *inspect) addChecks(s *schema.Schema, rows *sql.Rows) error {
-	names := make(map[string]*schema.Check)
+	type tc struct{ t, n string }
+	names := make(map[tc]*schema.Check)
 	for rows.Next() {
 		var (
 			noInherit                            bool
@@ -658,20 +739,22 @@ func (i *inspect) addChecks(s *schema.Schema, rows *sql.Rows) error {
 		if !ok {
 			return fmt.Errorf("table %q was not found in schema", table)
 		}
-		if _, ok := t.Column(column); !ok {
+		c, ok := t.Column(column)
+		if !ok {
 			return fmt.Errorf("postgres: column %q was not found for check %q", column, name)
 		}
-		check, ok := names[name]
+		ck, ok := names[tc{t: table, n: name}]
 		if !ok {
-			check = &schema.Check{Name: name, Expr: clause, Attrs: []schema.Attr{&CheckColumns{}}}
+			ck = &schema.Check{Name: name, Expr: clause, Attrs: []schema.Attr{&CheckColumns{}}}
 			if noInherit {
-				check.Attrs = append(check.Attrs, &NoInherit{})
+				ck.AddAttrs(&NoInherit{})
 			}
-			names[name] = check
-			t.Attrs = append(t.Attrs, check)
+			names[tc{t: table, n: name}] = ck
+			t.AddAttrs(ck)
 		}
-		c := check.Attrs[0].(*CheckColumns)
-		c.Columns = append(c.Columns, column)
+		c.AddAttrs(ck)
+		attr := ck.Attrs[0].(*CheckColumns)
+		attr.Columns = append(attr.Columns, column)
 	}
 	return nil
 }
@@ -787,7 +870,7 @@ func canConvert(t schema.Type, x string) (string, bool) {
 	q := x[0:i]
 	x = x[1 : i-1]
 	switch t.(type) {
-	case *enumType:
+	case *schema.EnumType:
 		return q, true
 	case *schema.BoolType:
 		if sqlx.IsLiteralBool(x) {
@@ -823,16 +906,6 @@ type (
 		V int64
 	}
 
-	// enumType represents an enum type. It serves aa intermediate representation of a Postgres enum type,
-	// to temporary save TypeID and TypeName of an enum column until the enum values can be extracted.
-	enumType struct {
-		schema.Type
-		T      string // Type name.
-		Schema string // Optional schema name.
-		ID     int64  // Type id.
-		Values []string
-	}
-
 	// ArrayType defines an array type.
 	// https://postgresql.org/docs/current/arrays.html
 	ArrayType struct {
@@ -860,6 +933,18 @@ type (
 		Checks  []*schema.Check // Check constraints.
 		Attrs   []schema.Attr   // Extra attributes, such as OID.
 		Deps    []schema.Object // Objects this domain depends on.
+	}
+
+	// CompositeType defines a composite type.
+	// https://www.postgresql.org/docs/current/rowtypes.html
+	CompositeType struct {
+		schema.Type
+		schema.Object
+		T      string           // Type name.
+		Schema *schema.Schema   // Optional schema.
+		Fields []*schema.Column // Type fields, also known as attributes/columns.
+		Attrs  []schema.Attr    // Extra attributes, such as OID.
+		Deps   []schema.Object  // Objects this domain depends on.
 	}
 
 	// IntervalType defines an interval type.
@@ -927,12 +1012,34 @@ type (
 		T string
 	}
 
+	// ConvertUsing describes the USING clause to convert
+	// one type to another.
+	ConvertUsing struct {
+		schema.Clause
+		X string // Conversion expression.
+	}
+
 	// Constraint describes a postgres constraint.
 	// https://postgresql.org/docs/current/catalog-pg-constraint.html
 	Constraint struct {
 		schema.Attr
 		N string // constraint name
 		T string // c, f, p, u, t, x.
+	}
+
+	// Operator describes an operator.
+	// https://www.postgresql.org/docs/current/sql-createoperator.html
+	Operator struct {
+		schema.Attr
+		schema.Object
+		// Schema where the operator is defined. If nil, the operator
+		// is not managed by the current scope.
+		Schema *schema.Schema
+		// Operator name. Might include the schema name if the schema
+		// is not managed by the current scope or extension based.
+		// e.g., "public.&&".
+		Name  string
+		Attrs []schema.Attr
 	}
 
 	// Sequence defines (the supported) sequence options.
@@ -1033,6 +1140,12 @@ type (
 		schema.Clause
 	}
 
+	// NotValid describes the NOT VALID clause for the creation
+	// of check and foreign-key constraints.
+	NotValid struct {
+		schema.Clause
+	}
+
 	// NoInherit attribute defines the NO INHERIT flag for CHECK constraint.
 	// https://postgresql.org/docs/current/catalog-pg-constraint.html
 	NoInherit struct {
@@ -1079,14 +1192,36 @@ type (
 	ReferenceOption schema.ReferenceOption
 )
 
+var _ specutil.RefNamer = (*DomainType)(nil)
+
 // Ref returns a reference to the domain type.
 func (d *DomainType) Ref() *schemahcl.Ref {
-	return &schemahcl.Ref{V: "$domain." + d.T}
+	return specutil.ObjectRef(d.Schema, d)
+}
+
+// SpecType returns the type of the domain.
+func (d *DomainType) SpecType() string {
+	return "domain"
+}
+
+// SpecName returns the name of the domain.
+func (d *DomainType) SpecName() string {
+	return d.T
 }
 
 // Underlying returns the underlying type of the domain.
 func (d *DomainType) Underlying() schema.Type {
 	return d.Type
+}
+
+// SpecType returns the type of the composite type.
+func (c *CompositeType) SpecType() string {
+	return "composite"
+}
+
+// SpecName returns the name of the composite type.
+func (c *CompositeType) SpecName() string {
+	return c.T
 }
 
 // Underlying returns the underlying type of the array.
@@ -1122,8 +1257,34 @@ func (o *ReferenceOption) Scan(v any) error {
 	return nil
 }
 
-// IsUnique reports if the type is unique constraint.
+// IsUnique reports if the type is a unique constraint.
 func (c Constraint) IsUnique() bool { return strings.ToLower(c.T) == "u" }
+
+// IsExclude reports if the type is an exclude constraint.
+func (c Constraint) IsExclude() bool { return strings.ToLower(c.T) == "x" }
+
+// UniqueConstraint returns constraint with type "u".
+func UniqueConstraint(name string) *Constraint {
+	return &Constraint{T: "u", N: name}
+}
+
+// ExcludeConstraint returns constraint with type "x".
+func ExcludeConstraint(name string) *Constraint {
+	return &Constraint{T: "x", N: name}
+}
+
+// NewOperator returns the string representation of the operator.
+func NewOperator(scope string, name string) *Operator {
+	// When scanned from the database, the operator is returned as: "<schema>.<operator>".
+	// The common case is that operators are the default and defined in pg_catalog, or are
+	// installed by extensions.
+	if parts := strings.FieldsFunc(name, func(r rune) bool {
+		return r == '.'
+	}); len(parts) == 2 && (scope == "" || parts[0] == "pg_catalog" || parts[0] == scope) {
+		return &Operator{Name: parts[1]}
+	}
+	return &Operator{Name: name}
+}
 
 // IntegerType returns the underlying integer type this serial type represents.
 func (s *SerialType) IntegerType() *schema.IntegerType {
@@ -1314,11 +1475,6 @@ func parseFmtType(t string) (s, n string) {
 	return s, n
 }
 
-func newEnumType(t string, id int64) *enumType {
-	s, n := parseFmtType(t)
-	return &enumType{T: n, Schema: s, ID: id}
-}
-
 const (
 	// Query to list runtime parameters.
 	paramsQuery = `SELECT setting FROM pg_settings WHERE name IN ('server_version_num', 'crdb_version') ORDER BY name DESC`
@@ -1363,7 +1519,7 @@ FROM
 	JOIN pg_catalog.pg_namespace AS t2 ON t2.nspname = t1.table_schema
 	JOIN pg_catalog.pg_class AS t3 ON t3.relnamespace = t2.oid AND t3.relname = t1.table_name
 	LEFT JOIN pg_catalog.pg_partitioned_table AS t4 ON t4.partrelid = t3.oid
-	LEFT JOIN pg_depend AS t5 ON t5.objid = t3.oid AND t5.deptype = 'e'
+	LEFT JOIN pg_depend AS t5 ON t5.classid = 'pg_catalog.pg_class'::regclass::oid AND t5.objid = t3.oid AND t5.deptype = 'e'
 WHERE
 	t1.table_type = 'BASE TABLE'
 	AND NOT COALESCE(t3.relispartition, false)
@@ -1386,7 +1542,7 @@ FROM
 	JOIN pg_catalog.pg_namespace AS t2 ON t2.nspname = t1.table_schema
 	JOIN pg_catalog.pg_class AS t3 ON t3.relnamespace = t2.oid AND t3.relname = t1.table_name
 	LEFT JOIN pg_catalog.pg_partitioned_table AS t4 ON t4.partrelid = t3.oid
-	LEFT JOIN pg_depend AS t5 ON t5.objid = t3.oid AND t5.deptype = 'e'
+	LEFT JOIN pg_depend AS t5 ON t5.classid = 'pg_catalog.pg_class'::regclass::oid AND t5.objid = t3.oid AND t5.deptype = 'e'
 WHERE
 	t1.table_type = 'BASE TABLE'
 	AND NOT COALESCE(t3.relispartition, false)
@@ -1421,7 +1577,6 @@ SELECT
 	col_description(t3.oid, "ordinal_position") AS comment,
 	t4.typtype,
 	t4.typelem,
-	(CASE WHEN t4.typcategory = 'A' AND t4.typelem <> 0 THEN (SELECT t.typtype FROM pg_catalog.pg_type t WHERE t.oid = t4.typelem) END) AS elemtyp,
 	t4.oid
 FROM
 	"information_schema"."columns" AS t1
@@ -1532,6 +1687,7 @@ SELECT
 	%s AS included,
 	idx.indisprimary AS primary,
 	idx.indisunique AS unique,
+	(CASE WHEN idx.indisexclusion THEN (SELECT conexclop[idx.ord]::regoper FROM pg_constraint WHERE conindid = idx.indexrelid) END) AS excoper,
 	con.nametypes AS constraints,
 	pg_get_expr(idx.indpred, idx.indrelid) AS predicate,
 	pg_get_indexdef(idx.indexrelid, idx.ord, false) AS expression,

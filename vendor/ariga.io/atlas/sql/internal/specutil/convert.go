@@ -7,6 +7,7 @@ package specutil
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -61,6 +62,8 @@ type (
 		Proc  func(*sqlspec.Func) (*schema.Proc, error)
 		// Triggers add themselves to the relevant tables/views.
 		Triggers func(*schema.Realm, []*sqlspec.Trigger) error
+		// Objects add themselves to the realm.
+		Objects func(*schema.Realm) error
 	}
 
 	// SchemaFuncs represents a set of spec functions
@@ -70,6 +73,20 @@ type (
 		View  ViewSpecFunc
 		Func  func(*schema.Func) (*sqlspec.Func, error)
 		Proc  func(*schema.Proc) (*sqlspec.Func, error)
+	}
+	// RefNamer is an interface for objects that can
+	// return their reference.
+	RefNamer interface {
+		// Ref returns the reference to the object.
+		Ref() *schemahcl.Ref
+	}
+	// SpecTypeNamer is an interface for objects that can
+	// return their spec type and name.
+	SpecTypeNamer interface {
+		// SpecType returns the spec type of the object.
+		SpecType() string
+		// SpecName returns the spec name of the object.
+		SpecName() string
 	}
 )
 
@@ -240,6 +257,11 @@ func Scan(r *schema.Realm, doc *ScanDoc, funcs *ScanFuncs) error {
 	}
 	if funcs.Triggers != nil {
 		if err := funcs.Triggers(r, doc.Triggers); err != nil {
+			return err
+		}
+	}
+	if funcs.Objects != nil {
+		if err := funcs.Objects(r); err != nil {
 			return err
 		}
 	}
@@ -658,10 +680,10 @@ func FromView(v *schema.View, colFn ViewColumnSpecFunc, idxFn IndexSpecFunc) (*s
 		}
 		spec.Indexes = append(spec.Indexes, i)
 	}
-	as := v.Def
+	as := normalizeCRLF(v.Def)
 	// In case the view definition is multi-line,
 	// format it as indented heredoc with two spaces.
-	if lines := strings.Split(v.Def, "\n"); len(lines) > 1 {
+	if lines := strings.Split(as, "\n"); len(lines) > 1 {
 		as = fmt.Sprintf("<<-SQL\n  %s\n  SQL", strings.Join(lines, "\n  "))
 	}
 	embed := &schemahcl.Resource{
@@ -686,30 +708,46 @@ func FromView(v *schema.View, colFn ViewColumnSpecFunc, idxFn IndexSpecFunc) (*s
 	return spec, nil
 }
 
+// normalizeCRLF for heredoc strings that inspected and printed in the HCL as-is to
+// avoid having mixed endings in the printed file - Unix-like (default) and Windows-like.
+func normalizeCRLF(s string) string {
+	if strings.Contains(s, "\r\n") {
+		return strings.ReplaceAll(s, "\r\n", "\n")
+	}
+	return s
+}
+
 // dependsOn returns the depends_on attribute for the given objects.
 func dependsOn(realm *schema.Realm, objects []schema.Object) (*schemahcl.Attr, bool) {
 	var (
-		deps  = make([]*schemahcl.Ref, 0, len(objects))
-		names = make(map[string]int)
-		name  = func(t schema.Object, n string) string { return typeName(t) + "/" + n }
+		n2s  = make(map[string][]*schema.Schema)
+		name = func(t schema.Object, n string) string { return typeName(t) + "/" + n }
 	)
 	// Qualify references if there are objects with the same name.
 	if realm != nil {
 		for _, s := range realm.Schemas {
 			for _, t := range s.Tables {
-				names[name(t, t.Name)]++
+				n2s[name(t, t.Name)] = append(n2s[name(t, t.Name)], s)
 			}
 			for _, v := range s.Views {
-				names[name(v, v.Name)]++
+				n2s[name(v, v.Name)] = append(n2s[name(v, v.Name)], s)
 			}
 			for _, f := range s.Funcs {
-				names[name(f, f.Name)]++
+				if n := name(f, f.Name); !slices.Contains(n2s[n], s) {
+					n2s[n] = append(n2s[n], s) // Count overload once.
+				}
 			}
 			for _, p := range s.Procs {
-				names[name(p, p.Name)]++
+				if n := name(p, p.Name); !slices.Contains(n2s[n], s) {
+					n2s[n] = append(n2s[n], s) // Count overload once.
+				}
 			}
 		}
 	}
+	var (
+		refs = make(map[string]bool, len(objects))
+		deps = make([]*schemahcl.Ref, 0, len(objects))
+	)
 	for _, o := range objects {
 		path := make([]string, 0, 2)
 		var n, s string
@@ -722,15 +760,25 @@ func dependsOn(realm *schema.Realm, objects []schema.Object) (*schemahcl.Attr, b
 			n, s = d.Name, d.Schema.Name
 		case *schema.Proc:
 			n, s = d.Name, d.Schema.Name
+		case RefNamer:
+			// If the object is a reference, add it to the depends_on list.
+			deps = append(deps, d.Ref())
+			continue
 		}
-		if names[name(o, n)] > 1 {
+		if len(n2s[name(o, n)]) > 1 {
 			path = append(path, s)
 		}
-		deps = append(deps, schemahcl.BuildRef([]schemahcl.PathIndex{
+		if r := schemahcl.BuildRef([]schemahcl.PathIndex{
 			{T: typeName(o), V: append(path, n)},
-		}))
+		}); !refs[r.V] {
+			refs[r.V] = true
+			deps = append(deps, r)
+		}
 	}
 	if len(deps) > 0 {
+		slices.SortFunc(deps, func(l, r *schemahcl.Ref) int {
+			return strings.Compare(l.V, r.V)
+		})
 		return schemahcl.RefsAttr("depends_on", deps...), true
 	}
 	return nil, false
@@ -770,6 +818,15 @@ func fromDependsOn[T interface{ AddDeps(...schema.Object) T }](loc string, t T, 
 		case typeProcedure:
 			o, err = findT(ns, q, n, func(s *schema.Schema, name string) (*schema.Proc, bool) {
 				return s.Proc(name)
+			})
+		default:
+			o, err = findT(ns, q, n, func(s *schema.Schema, name string) (schema.Object, bool) {
+				return s.Object(func(o schema.Object) bool {
+					if o, ok := o.(SpecTypeNamer); ok {
+						return p[0].T == o.SpecType() && name == o.SpecName()
+					}
+					return false
+				})
 			})
 		}
 		if err != nil {

@@ -85,7 +85,7 @@ func (s *state) plan(changes []schema.Change) error {
 	if err != nil {
 		return err
 	}
-	for _, c := range sqlx.SortChanges(planned) {
+	for _, c := range sqlx.SortChanges(planned, nil) {
 		switch c := c.(type) {
 		case *schema.AddTable:
 			err = s.addTable(c)
@@ -375,12 +375,19 @@ func (s *state) modifyTable(modify *schema.ModifyTable) error {
 func (s *state) alterTable(t *schema.Table, changes []schema.Change) error {
 	var (
 		reverse    []schema.Change
+		name       = t.Name
 		reversible = true
 	)
 	build := func(changes []schema.Change) (string, error) {
-		b := s.Build("ALTER TABLE").Table(t)
+		b := s.Build("ALTER TABLE").SchemaResource(t.Schema, name)
 		err := b.MapCommaErr(changes, func(i int, b *sqlx.Builder) error {
 			switch change := changes[i].(type) {
+			case *schema.RenameTable:
+				b.P("RENAME TO").Table(change.To)
+				// Next time "build" is called, it
+				// will refer to the new table name.
+				name = change.To.Name
+				reverse = append(reverse, &schema.RenameTable{From: change.To, To: change.From})
 			case *schema.AddColumn:
 				b.P("ADD COLUMN")
 				if err := s.column(b, t, change.C); err != nil {
@@ -391,7 +398,12 @@ func (s *state) alterTable(t *schema.Table, changes []schema.Change) error {
 				if err := checkChangeGenerated(change.From, change.To); err != nil {
 					return err
 				}
-				b.P("MODIFY COLUMN")
+				// In case the column was both modified and renamed.
+				if change.To.Name != change.From.Name {
+					b.P("CHANGE COLUMN").Ident(change.From.Name)
+				} else {
+					b.P("MODIFY COLUMN")
+				}
 				if err := s.column(b, t, change.To); err != nil {
 					return err
 				}
@@ -763,8 +775,8 @@ func (s *state) columnDefault(b *sqlx.Builder, c *schema.Column) {
 
 // Build instantiates a new builder and writes the given phrase to it.
 func (s *state) Build(phrases ...string) *sqlx.Builder {
-	b := &sqlx.Builder{QuoteOpening: '`', QuoteClosing: '`', Schema: s.SchemaQualifier, Indent: s.Indent}
-	return b.P(phrases...)
+	return (*Driver).StmtBuilder(nil, s.PlanOptions).
+		P(phrases...)
 }
 
 // skipAutoChanges filters unnecessary changes that are automatically

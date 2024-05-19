@@ -27,17 +27,28 @@ var DefaultDiff schema.Differ = &sqlx.Diff{DiffDriver: &diff{&conn{ExecQuerier: 
 type diff struct{ *conn }
 
 // SchemaAttrDiff returns a changeset for migrating schema attributes from one state to the other.
-func (*diff) SchemaAttrDiff(from, to *schema.Schema) []schema.Change {
-	var changes []schema.Change
-	if change := sqlx.CommentDiff(skipDefaultComment(from), skipDefaultComment(to)); change != nil {
+func (d *diff) SchemaAttrDiff(from, to *schema.Schema) []schema.Change {
+	var (
+		changes    []schema.Change
+		fromA, toA []schema.Attr
+	)
+	// In schema scope, users might compare a "public" schema with a "non-public" schema.
+	// However, since the public standard comment is auto created and not set by the users
+	// this is unintentional in most cases, and this change will be rejected by the plan stage.
+	if d.schema != "" {
+		fromA, toA = skipDefaultComment(from, from.Name), skipDefaultComment(to, to.Name)
+	} else {
+		fromA, toA = skipDefaultComment(from, "public"), skipDefaultComment(to, "public")
+	}
+	if change := sqlx.CommentDiff(fromA, toA); change != nil {
 		changes = append(changes, change)
 	}
 	return changes
 }
 
-func skipDefaultComment(s *schema.Schema) []schema.Attr {
+func skipDefaultComment(s *schema.Schema, public string) []schema.Attr {
 	attrs := s.Attrs
-	if c := (schema.Comment{}); sqlx.Has(attrs, &c) && c.Text == "standard public schema" && (s.Name == "" || s.Name == "public") {
+	if c := (schema.Comment{}); sqlx.Has(attrs, &c) && c.Text == "standard public schema" && (s.Name == "" || s.Name == public) {
 		attrs = schema.RemoveAttr[*schema.Comment](attrs)
 	}
 	return attrs
@@ -189,6 +200,9 @@ func (*diff) IndexAttrChanged(from, to []schema.Attr) bool {
 	if indexNullsDistinct(to) != indexNullsDistinct(from) {
 		return true
 	}
+	if uniqueConstChanged(from, to) || excludeConstChanged(from, to) {
+		return true
+	}
 	var p1, p2 IndexPredicate
 	if sqlx.Has(from, &p1) != sqlx.Has(to, &p2) || (p1.P != p2.P && p1.P != sqlx.MayWrap(p2.P)) {
 		return true
@@ -211,6 +225,14 @@ func (*diff) IndexPartAttrChanged(fromI, toI *schema.Index, i int) bool {
 	if p1.NullsFirst != p2.NullsFirst || p1.NullsLast != p2.NullsLast {
 		return true
 	}
+	_, ok1 := excludeConst(from.Attrs)
+	_, ok2 := excludeConst(to.Attrs)
+	if ok1 && ok2 {
+		// In case the index(es) are EXCLUDE constraint, we compare its operator
+		// (and not its class) because the class is derived from the operator.
+		return sqlx.AttrOr(from.Attrs, &Operator{}).Name != sqlx.AttrOr(to.Attrs, &Operator{}).Name
+	}
+	// Op class for non-exclude.
 	var fromOp, toOp IndexOpClass
 	switch fromHas, toHas := sqlx.Has(from.Attrs, &fromOp), sqlx.Has(to.Attrs, &toOp); {
 	case fromHas && toHas:
@@ -494,6 +516,26 @@ func indexNullsDistinct(attrs []schema.Attr) bool {
 	// The default PostgreSQL behavior. The inverse of
 	// "indnullsnotdistinct" in pg_index which is false.
 	return true
+}
+
+// uniqueConst returns the first unique constraint from the given attributes.
+func uniqueConst(attrs []schema.Attr) (*Constraint, bool) {
+	for _, a := range attrs {
+		if c, ok := a.(*Constraint); ok && c.IsUnique() {
+			return c, true
+		}
+	}
+	return nil, false
+}
+
+// excludeConst returns the first exclude constraint from the given attributes.
+func excludeConst(attrs []schema.Attr) (*Constraint, bool) {
+	for _, a := range attrs {
+		if c, ok := a.(*Constraint); ok && c.IsExclude() {
+			return c, true
+		}
+	}
+	return nil, false
 }
 
 func trimCast(s string) string {

@@ -39,6 +39,9 @@ func (p *planApply) PlanChanges(ctx context.Context, name string, changes []sche
 	for _, o := range opts {
 		o(&s.PlanOptions)
 	}
+	if err := verifyChanges(ctx, changes); err != nil {
+		return nil, err
+	}
 	if err := s.plan(ctx, changes); err != nil {
 		return nil, err
 	}
@@ -413,6 +416,14 @@ func (s *state) copyRows(from *schema.Table, to *schema.Table, changes []schema.
 					return false, fmt.Errorf("duplicate changes for column: %q: %T, %T", column.Name, change, c)
 				}
 				change = changes[i]
+			case *schema.RenameColumn:
+				if c.To.Name != column.Name {
+					break
+				}
+				if change != nil {
+					return false, fmt.Errorf("duplicate changes for column: %q: %T, %T", column.Name, change, c)
+				}
+				change = changes[i]
 			case *schema.DropColumn:
 				if c.C.Name == column.Name {
 					return false, fmt.Errorf("unexpected drop column: %q", column.Name)
@@ -436,6 +447,9 @@ func (s *state) copyRows(from *schema.Table, to *schema.Table, changes []schema.
 			} else {
 				fromC = append(fromC, column.Name)
 			}
+		case *schema.RenameColumn:
+			toC = append(toC, change.To.Name)
+			fromC = append(fromC, change.From.Name)
 		// Columns without changes should be transferred as-is.
 		case nil:
 			toC = append(toC, column.Name)
@@ -576,8 +590,8 @@ func autoincPK(pk *schema.Index) bool {
 
 // Build instantiates a new builder and writes the given phrase to it.
 func (s *state) Build(phrases ...string) *sqlx.Builder {
-	b := &sqlx.Builder{QuoteOpening: '`', QuoteClosing: '`', Schema: s.SchemaQualifier, Indent: s.Indent}
-	return b.P(phrases...)
+	return (*Driver).StmtBuilder(nil, s.PlanOptions).
+		P(phrases...)
 }
 
 func defaultValue(c *schema.Column) (string, error) {

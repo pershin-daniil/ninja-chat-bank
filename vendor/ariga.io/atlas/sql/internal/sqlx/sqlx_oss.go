@@ -20,3 +20,29 @@ func (*Diff) triggerDiff(_, _ interface {
 }, _, _ []*schema.Trigger, _ *schema.DiffOptions) ([]schema.Change, error) {
 	return nil, nil // unimplemented.
 }
+
+// funcDep returns true if f1 depends on f2.
+func funcDep(_, _ *schema.Func, _ SortOptions) bool {
+	return false // unimplemented.
+}
+
+// procDep returns true if p1 depends on p2.
+func procDep(_, _ *schema.Proc, _ SortOptions) bool {
+	return false // unimplemented.
+}
+
+func tableDepFunc(*schema.Table, *schema.Func, SortOptions) bool {
+	return false // unimplemented.
+}
+
+func (*Diff) askForColumns(_ *schema.Table, changes []schema.Change, _ *schema.DiffOptions) ([]schema.Change, error) {
+	return changes, nil // unimplemented.
+}
+
+func (*Diff) askForIndexes(_ string, changes []schema.Change, _ *schema.DiffOptions) ([]schema.Change, error) {
+	return changes, nil // unimplemented.
+}
+
+func (*Diff) fixRenames(changes schema.Changes) schema.Changes {
+	return changes // unimplemented.
+}
