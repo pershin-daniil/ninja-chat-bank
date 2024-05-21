@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/suite"
+	"go.uber.org/mock/gomock"
 
 	chatsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/chats"
 	jobsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/jobs"

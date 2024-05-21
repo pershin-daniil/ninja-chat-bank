@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/goleak"
+	"go.uber.org/mock/gomock"
 
 	jobsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/jobs"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"

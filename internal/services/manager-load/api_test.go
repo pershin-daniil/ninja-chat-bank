@@ -5,8 +5,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/suite"
+	"go.uber.org/mock/gomock"
 
 	managerload "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-load"
 	managerloadmocks "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-load/mocks"

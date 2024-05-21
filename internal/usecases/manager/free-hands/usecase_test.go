@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/suite"
+	"go.uber.org/mock/gomock"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/testingh"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"

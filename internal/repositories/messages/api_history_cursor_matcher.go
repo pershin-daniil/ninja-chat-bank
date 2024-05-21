@@ -3,7 +3,7 @@ package messagesrepo
 import (
 	"fmt"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 )
 
 var _ gomock.Matcher = CursorMatcher{}

@@ -59,16 +59,6 @@ func run() (errReturned error) {
 	}
 	defer logger.Sync()
 
-	lg := zap.L().Named("main")
-
-	// Storage.
-	var storage *store.Client
-	{
-		switch s := cfg.Stores.Use; s {
-
-		}
-	}
-
 	clientSwagger, err := clientv1.GetSwagger()
 	if err != nil {
 		return fmt.Errorf("failed to get client swagger: %v", err)
