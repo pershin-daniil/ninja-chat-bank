@@ -44,7 +44,6 @@ linters-settings:
       - standard
       - default
       - prefix(github.com/pershin-daniil/ninja-chat-bank)
-    custom-order: true
 
   godox:
     keywords:
