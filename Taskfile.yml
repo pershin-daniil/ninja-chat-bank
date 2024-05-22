@@ -1,4 +1,8 @@
 # https://taskfile.dev
+#
+# task --version
+# Task version: v3.37.1
+#
 version: '3'
 
 silent: true
@@ -8,7 +12,7 @@ vars:
   GO_FILES:
     sh: find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./internal/store/*" -not -path "*.gen.go" | tr "\n" " "
 
-  GOLANGCI_LINT_VERSION: v1.56.2
+  GOLANGCI_LINT_VERSION: v1.58.1
   GOLANGCI_LINT_CACHE:
     sh: echo "$HOME/.cache"
 
@@ -17,7 +21,7 @@ vars:
 
   DEV_TOOLS: |
     entgo.io/ent/cmd/ent@v0.13.1
-    github.com/daixiang0/gci@v0.13.1
+    github.com/daixiang0/gci@v0.13.4
     github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.1.0
     github.com/kazhuravlev/options-gen/cmd/options-gen@v0.32.0
     github.com/onsi/ginkgo/v2/ginkgo@v2.17.1
@@ -29,11 +33,12 @@ vars:
     ./deploy/local/docker-compose.yml
     ./deploy/local/docker-compose.sentry.yml
     ./deploy/local/docker-compose.swagger-ui.yml
-
   DOCKER_COMPOSE_CMD: docker compose -f {{ .DOCKER_COMPOSE_PATHS | trim | splitLines | join " -f " }}
 
   TYPES: |
     ChatID
+    FailedJobID
+    JobID
     MessageID
     ProblemID
     RequestID
@@ -42,13 +47,20 @@ vars:
   TYPES_DST: ./internal/types/types.gen.go
 
   ENT_SCHEMA: ./internal/store/schema
-  ENT_DIR: ./internal/store/ent-gen
+  ENT_TEMPLATES: ./internal/store/templates
+  ENT_FEATURES: |
+    sql/execquery
+    sql/upsert
 
-  KEYCLOAK_REALM_PATH: ./deploy/local/ban-realm.json
+  KEYCLOAK_REALM_PATH: ./deploy/local/bank-realm.json
 
   CLIENT_V1_PKG: clientv1
   CLIENT_V1_SRC: ./api/client.v1.swagger.yml
   CLIENT_V1_DST: ./internal/server-client/v1/server.gen.go
+
+  MANAGER_V1_PKG: managerv1
+  MANAGER_V1_SRC: ./api/manager.v1.swagger.yml
+  MANAGER_V1_DST: ./internal/server-manager/v1/server.gen.go
 
   ### E2E tests ###
   E2E_CLIENT_V1_DST: ./tests/e2e/api/client/v1/client.gen.go
@@ -120,9 +132,10 @@ tasks:
   kc:export:
     cmds:
       - echo "- Exporting realm"
-      - "{{.DOCKER_COMPOSE_CMD}} exec keycloak /opt/keycloak/bin/kc.sh export \
-          --realm Bank \
-          --file /dev/stdout > ./deploy/local/keycloak-bank-realm.json"
+      - cmd: docker exec -it local-keycloak-1 /opt/keycloak/bin/kc.sh export --realm Bank --users realm_file --file /tmp/realm.json
+        ignore_error: true # https://github.com/keycloak/keycloak/issues/12957
+      - docker cp local-keycloak-1:/tmp/realm.json {{.KEYCLOAK_REALM_PATH}}
+      - echo "Exported in {{.KEYCLOAK_REALM_PATH}}"
 
   tests:e2e:
     env:
@@ -170,30 +183,50 @@ tasks:
       - go run ./cmd/gen-types {{.TYPES_PKG}} {{ .TYPES | trim | splitLines | join "," }} {{.TYPES_DST}}
 
   ent:new:
+    dir: "{{.TOOLS_DIR}}"
     cmds:
-      - go run -mod=mod entgo.io/ent/cmd/ent new --target {{.ENT_SCHEMA}} {{$.CLI_ARGS}}
+      - ./ent new --target {{.ENT_SCHEMA}} {{$.CLI_ARGS}}
       - task: tidy
 
   ent:gen:
+    dir: "{{.TOOLS_DIR}}"
     cmds:
-      - go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/upsert,sql/lock --template ./internal/store/templates/ {{.ENT_SCHEMA}}
+      - ./ent generate --template ../../{{.ENT_TEMPLATES}} --feature {{ .ENT_FEATURES | trim | splitLines | join "," }} ../../{{.ENT_SCHEMA}}
       - task: tidy
 
   gen:api:
+    cmds:
+      - task: gen:client
+      - task: gen:manager
+      - task: tidy
+
+  gen:client:
+    internal: true
     dir: "{{.TOOLS_DIR}}"
     cmds:
-      - ./oapi-codegen -old-config-style -package {{.CLIENT_V1_PKG }} ../../{{.CLIENT_V1_SRC}} > ../../{{.CLIENT_V1_DST}}
+      - echo "Generate client server..."
+      - ./oapi-codegen -old-config-style -generate skip-prune,types,server,spec -package {{.CLIENT_V1_PKG }} ../../{{.CLIENT_V1_SRC}} > ../../{{.CLIENT_V1_DST}}
+
+  gen:manager:
+    internal: true
+    dir: "{{.TOOLS_DIR}}"
+    cmds:
+      - echo "Generate manager server..."
+      - ./oapi-codegen -old-config-style -generate skip-prune,types,server,spec -package {{.MANAGER_V1_PKG }} ../../{{.MANAGER_V1_SRC}} > ../../{{.MANAGER_V1_DST}}
 
   gen:e2e:
     dir: "{{.TOOLS_DIR}}"
     cmds:
       - echo "[E2E] Generate client API..."
       - ./oapi-codegen --old-config-style -generate types,client -package {{.E2E_CLIENT_V1_PKG}} ../../{{.CLIENT_V1_SRC}} > ../../{{.E2E_CLIENT_V1_DST}}
+      - task: tidy
+
 
   deps:
     cmds:
       - echo "- Run deps containers"
-      - "{{.DOCKER_COMPOSE_CMD}} up -d"
+      - "{{.DOCKER_COMPOSE_CMD}} rm -sfv keycloak" # To prevent using old config or config from other project.
+      - "{{.DOCKER_COMPOSE_CMD}} up -d {{.CLI_ARGS}}"
 
   deps:cmd:
     cmds:
@@ -205,7 +238,7 @@ tasks:
 
   deps:logs:
     cmds:
-      - "{{.DOCKER_COMPOSE_CMD}} logs {{.CLI_ARGS}}"
+      - "{{.DOCKER_COMPOSE_CMD}} logs -f {{.CLI_ARGS}}"
 
   deps:stop:
     cmds:

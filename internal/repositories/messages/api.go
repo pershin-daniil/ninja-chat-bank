@@ -13,12 +13,26 @@ import (
 var ErrMsgNotFound = errors.New("message not found")
 
 func (r *Repo) GetMessageByRequestID(ctx context.Context, reqID types.RequestID) (*Message, error) {
-	msg, err := r.db.Message(ctx).Query().Where(message.InitialRequestID(reqID)).Only(ctx)
-	switch {
-	case store.IsNotFound(err):
-		return nil, fmt.Errorf("%w: %v", ErrMsgNotFound, err)
-	case err != nil:
-		return nil, fmt.Errorf("failed to get messages by reqID: %v", err)
+	msg, err := r.db.Message(ctx).Query().
+		Unique(false).
+		Where(message.InitialRequestID(reqID)).
+		Only(ctx)
+	if err != nil {
+		if store.IsNotFound(err) {
+			return nil, fmt.Errorf("request id: %v: %w", reqID, ErrMsgNotFound)
+		}
+		return nil, fmt.Errorf("query message by request id: %v: %v", reqID, err)
+	}
+
+	m := adaptStoreMessage(msg)
+
+	return &m, nil
+}
+
+func (r *Repo) GetMessageByID(ctx context.Context, id types.MessageID) (*Message, error) {
+	msg, err := r.db.Message(ctx).Get(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("query message by id: %v", err)
 	}
 
 	m := adaptStoreMessage(msg)
@@ -36,17 +50,16 @@ func (r *Repo) CreateClientVisible(
 	msgBody string,
 ) (*Message, error) {
 	msg, err := r.db.Message(ctx).Create().
-		SetID(types.NewMessageID()).
-		SetInitialRequestID(reqID).
-		SetProblemID(problemID).
 		SetChatID(chatID).
+		SetProblemID(problemID).
 		SetAuthorID(authorID).
-		SetBody(msgBody).
 		SetIsVisibleForClient(true).
 		SetIsVisibleForManager(false).
+		SetBody(msgBody).
+		SetInitialRequestID(reqID).
 		Save(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create message: %v", err)
+		return nil, fmt.Errorf("create msg: %v", err)
 	}
 
 	m := adaptStoreMessage(msg)

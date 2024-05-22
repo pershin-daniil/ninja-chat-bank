@@ -255,6 +255,16 @@ func (*Driver) ParseType(s string) (schema.Type, error) {
 	return ParseType(s)
 }
 
+// StmtBuilder is a helper method used to build statements with MySQL formatting.
+func (*Driver) StmtBuilder(opts migrate.PlanOptions) *sqlx.Builder {
+	return &sqlx.Builder{
+		QuoteOpening: '`',
+		QuoteClosing: '`',
+		Schema:       opts.SchemaQualifier,
+		Indent:       opts.Indent,
+	}
+}
+
 // ScanStmts implements migrate.StmtScanner.
 func (*Driver) ScanStmts(input string) ([]*migrate.Stmt, error) {
 	return (&migrate.Scanner{
@@ -421,6 +431,9 @@ const (
 	TypeGeometryCollection = "geometrycollection" // Geometry_type::kGeometrycollection
 
 	TypeUUID = "uuid" // MariaDB supported uuid type from 10.7.0+
+
+	TypeInet4 = "inet4" // MariaDB type for storage of IPv4 addresses, from 10.10.0+.
+	TypeInet6 = "inet6" // MariaDB type for storage of IPv6 addresses, from 10.10.0+.
 )
 
 // Additional common constants in MySQL.

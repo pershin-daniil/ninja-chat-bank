@@ -15,14 +15,12 @@ const (
 	Label = "message"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldAuthorID holds the string denoting the author_id field in the database.
-	FieldAuthorID = "author_id"
 	// FieldChatID holds the string denoting the chat_id field in the database.
 	FieldChatID = "chat_id"
 	// FieldProblemID holds the string denoting the problem_id field in the database.
 	FieldProblemID = "problem_id"
-	// FieldInitialRequestID holds the string denoting the initial_request_id field in the database.
-	FieldInitialRequestID = "initial_request_id"
+	// FieldAuthorID holds the string denoting the author_id field in the database.
+	FieldAuthorID = "author_id"
 	// FieldIsVisibleForClient holds the string denoting the is_visible_for_client field in the database.
 	FieldIsVisibleForClient = "is_visible_for_client"
 	// FieldIsVisibleForManager holds the string denoting the is_visible_for_manager field in the database.
@@ -35,21 +33,16 @@ const (
 	FieldIsBlocked = "is_blocked"
 	// FieldIsService holds the string denoting the is_service field in the database.
 	FieldIsService = "is_service"
+	// FieldInitialRequestID holds the string denoting the initial_request_id field in the database.
+	FieldInitialRequestID = "initial_request_id"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
-	// EdgeProblem holds the string denoting the problem edge name in mutations.
-	EdgeProblem = "problem"
 	// EdgeChat holds the string denoting the chat edge name in mutations.
 	EdgeChat = "chat"
+	// EdgeProblem holds the string denoting the problem edge name in mutations.
+	EdgeProblem = "problem"
 	// Table holds the table name of the message in the database.
 	Table = "messages"
-	// ProblemTable is the table that holds the problem relation/edge.
-	ProblemTable = "messages"
-	// ProblemInverseTable is the table name for the Problem entity.
-	// It exists in this package in order to avoid circular dependency with the "problem" package.
-	ProblemInverseTable = "problems"
-	// ProblemColumn is the table column denoting the problem relation/edge.
-	ProblemColumn = "problem_id"
 	// ChatTable is the table that holds the chat relation/edge.
 	ChatTable = "messages"
 	// ChatInverseTable is the table name for the Chat entity.
@@ -57,21 +50,28 @@ const (
 	ChatInverseTable = "chats"
 	// ChatColumn is the table column denoting the chat relation/edge.
 	ChatColumn = "chat_id"
+	// ProblemTable is the table that holds the problem relation/edge.
+	ProblemTable = "messages"
+	// ProblemInverseTable is the table name for the Problem entity.
+	// It exists in this package in order to avoid circular dependency with the "problem" package.
+	ProblemInverseTable = "problems"
+	// ProblemColumn is the table column denoting the problem relation/edge.
+	ProblemColumn = "problem_id"
 )
 
 // Columns holds all SQL columns for message fields.
 var Columns = []string{
 	FieldID,
-	FieldAuthorID,
 	FieldChatID,
 	FieldProblemID,
-	FieldInitialRequestID,
+	FieldAuthorID,
 	FieldIsVisibleForClient,
 	FieldIsVisibleForManager,
 	FieldBody,
 	FieldCheckedAt,
 	FieldIsBlocked,
 	FieldIsService,
+	FieldInitialRequestID,
 	FieldCreatedAt,
 }
 
@@ -86,8 +86,6 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// DefaultInitialRequestID holds the default value on creation for the "initial_request_id" field.
-	DefaultInitialRequestID func() types.RequestID
 	// DefaultIsVisibleForClient holds the default value on creation for the "is_visible_for_client" field.
 	DefaultIsVisibleForClient bool
 	// DefaultIsVisibleForManager holds the default value on creation for the "is_visible_for_manager" field.
@@ -112,11 +110,6 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByAuthorID orders the results by the author_id field.
-func ByAuthorID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAuthorID, opts...).ToFunc()
-}
-
 // ByChatID orders the results by the chat_id field.
 func ByChatID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldChatID, opts...).ToFunc()
@@ -127,9 +120,9 @@ func ByProblemID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProblemID, opts...).ToFunc()
 }
 
-// ByInitialRequestID orders the results by the initial_request_id field.
-func ByInitialRequestID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldInitialRequestID, opts...).ToFunc()
+// ByAuthorID orders the results by the author_id field.
+func ByAuthorID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAuthorID, opts...).ToFunc()
 }
 
 // ByIsVisibleForClient orders the results by the is_visible_for_client field.
@@ -162,16 +155,14 @@ func ByIsService(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsService, opts...).ToFunc()
 }
 
+// ByInitialRequestID orders the results by the initial_request_id field.
+func ByInitialRequestID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInitialRequestID, opts...).ToFunc()
+}
+
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
-}
-
-// ByProblemField orders the results by problem field.
-func ByProblemField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newProblemStep(), sql.OrderByField(field, opts...))
-	}
 }
 
 // ByChatField orders the results by chat field.
@@ -180,17 +171,24 @@ func ByChatField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newChatStep(), sql.OrderByField(field, opts...))
 	}
 }
-func newProblemStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ProblemInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, ProblemTable, ProblemColumn),
-	)
+
+// ByProblemField orders the results by problem field.
+func ByProblemField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newProblemStep(), sql.OrderByField(field, opts...))
+	}
 }
 func newChatStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ChatInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, ChatTable, ChatColumn),
+	)
+}
+func newProblemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ProblemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, ProblemTable, ProblemColumn),
 	)
 }

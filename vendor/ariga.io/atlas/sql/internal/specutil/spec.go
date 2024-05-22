@@ -6,6 +6,7 @@ package specutil
 
 import (
 	"fmt"
+	"slices"
 
 	"ariga.io/atlas/schemahcl"
 	"ariga.io/atlas/sql/schema"
@@ -14,11 +15,6 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/zclconf/go-cty/cty"
 )
-
-// VarAttr is a helper method for constructing *schemahcl.Attr instances that contain a variable reference.
-func VarAttr(k, v string) *schemahcl.Attr {
-	return schemahcl.RefAttr(k, &schemahcl.Ref{V: v})
-}
 
 type (
 	// SchemaSpec is returned by driver convert functions to
@@ -243,6 +239,24 @@ func QualifyReferences(tableSpecs []*sqlspec.Table, realm *schema.Realm) error {
 	return nil
 }
 
+// ObjectRef returns a reference to the object. In case there is more than one object of
+// this type with the same name, the reference will be qualified with the schema name.
+func ObjectRef(s *schema.Schema, o SpecTypeNamer) *schemahcl.Ref {
+	typ, name := o.SpecType(), o.SpecName()
+	idx := schemahcl.PathIndex{T: typ, V: []string{name}}
+	if s != nil && s.Realm != nil && len(s.Realm.Schemas) > 1 && slices.ContainsFunc(s.Realm.Schemas, func(s1 *schema.Schema) bool {
+		return s1 != s && slices.ContainsFunc(s1.Objects, func(o1 schema.Object) bool {
+			if e, ok := o1.(SpecTypeNamer); ok {
+				return e.SpecType() == typ && e.SpecName() == name
+			}
+			return false
+		})
+	}) {
+		idx.V = append([]string{s.Name}, idx.V...)
+	}
+	return schemahcl.BuildRef([]schemahcl.PathIndex{idx})
+}
+
 // HCLBytesFunc returns a helper that evaluates an HCL document from a byte slice instead
 // of from an hclparse.Parser instance.
 func HCLBytesFunc(ev schemahcl.Evaluator) func(b []byte, v any, inp map[string]cty.Value) error {
@@ -252,5 +266,18 @@ func HCLBytesFunc(ev schemahcl.Evaluator) func(b []byte, v any, inp map[string]c
 			return diag
 		}
 		return ev.Eval(parser, v, inp)
+	}
+}
+
+// VarAttr is a helper method for constructing *schemahcl.Attr instances that contain a variable reference.
+func VarAttr(k, v string) *schemahcl.Attr {
+	return schemahcl.RefAttr(k, &schemahcl.Ref{V: v})
+}
+
+// TypeAttr is a helper method for constructing *schemahcl.Attr instances that contain a type reference.
+func TypeAttr(k string, t *schemahcl.Type) *schemahcl.Attr {
+	return &schemahcl.Attr{
+		K: k,
+		V: schemahcl.TypeValue(t),
 	}
 }

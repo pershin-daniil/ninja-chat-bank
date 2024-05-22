@@ -88,6 +88,11 @@ func (pc *ProblemCreate) SetNillableID(ti *types.ProblemID) *ProblemCreate {
 	return pc
 }
 
+// SetChat sets the "chat" edge to the Chat entity.
+func (pc *ProblemCreate) SetChat(c *Chat) *ProblemCreate {
+	return pc.SetChatID(c.ID)
+}
+
 // AddMessageIDs adds the "messages" edge to the Message entity by IDs.
 func (pc *ProblemCreate) AddMessageIDs(ids ...types.MessageID) *ProblemCreate {
 	pc.mutation.AddMessageIDs(ids...)
@@ -101,11 +106,6 @@ func (pc *ProblemCreate) AddMessages(m ...*Message) *ProblemCreate {
 		ids[i] = m[i].ID
 	}
 	return pc.AddMessageIDs(ids...)
-}
-
-// SetChat sets the "chat" edge to the Chat entity.
-func (pc *ProblemCreate) SetChat(c *Chat) *ProblemCreate {
-	return pc.SetChatID(c.ID)
 }
 
 // Mutation returns the ProblemMutation object of the builder.
@@ -227,22 +227,6 @@ func (pc *ProblemCreate) createSpec() (*Problem, *sqlgraph.CreateSpec) {
 		_spec.SetField(problem.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if nodes := pc.mutation.MessagesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   problem.MessagesTable,
-			Columns: []string{problem.MessagesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(message.FieldID, field.TypeUUID),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
 	if nodes := pc.mutation.ChatIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -258,6 +242,22 @@ func (pc *ProblemCreate) createSpec() (*Problem, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.ChatID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := pc.mutation.MessagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   problem.MessagesTable,
+			Columns: []string{problem.MessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(message.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

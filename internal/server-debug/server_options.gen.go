@@ -13,7 +13,8 @@ type OptOptionsSetter func(o *Options)
 
 func NewOptions(
 	addr string,
-	v1Swagger *openapi3.T,
+	v1ClientSwagger *openapi3.T,
+	v1ManagerSwagger *openapi3.T,
 	options ...OptOptionsSetter,
 ) Options {
 	o := Options{}
@@ -21,7 +22,8 @@ func NewOptions(
 	// Setting defaults from field tag (if present)
 
 	o.addr = addr
-	o.v1Swagger = v1Swagger
+	o.v1ClientSwagger = v1ClientSwagger
+	o.v1ManagerSwagger = v1ManagerSwagger
 
 	for _, opt := range options {
 		opt(&o)
@@ -32,7 +34,8 @@ func NewOptions(
 func (o *Options) Validate() error {
 	errs := new(errors461e464ebed9.ValidationErrors)
 	errs.Add(errors461e464ebed9.NewValidationError("addr", _validate_Options_addr(o)))
-	errs.Add(errors461e464ebed9.NewValidationError("v1Swagger", _validate_Options_v1Swagger(o)))
+	errs.Add(errors461e464ebed9.NewValidationError("v1ClientSwagger", _validate_Options_v1ClientSwagger(o)))
+	errs.Add(errors461e464ebed9.NewValidationError("v1ManagerSwagger", _validate_Options_v1ManagerSwagger(o)))
 	return errs.AsError()
 }
 
@@ -43,9 +46,16 @@ func _validate_Options_addr(o *Options) error {
 	return nil
 }
 
-func _validate_Options_v1Swagger(o *Options) error {
-	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.v1Swagger, "required"); err != nil {
-		return fmt461e464ebed9.Errorf("field `v1Swagger` did not pass the test: %w", err)
+func _validate_Options_v1ClientSwagger(o *Options) error {
+	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.v1ClientSwagger, "required"); err != nil {
+		return fmt461e464ebed9.Errorf("field `v1ClientSwagger` did not pass the test: %w", err)
+	}
+	return nil
+}
+
+func _validate_Options_v1ManagerSwagger(o *Options) error {
+	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.v1ManagerSwagger, "required"); err != nil {
+		return fmt461e464ebed9.Errorf("field `v1ManagerSwagger` did not pass the test: %w", err)
 	}
 	return nil
 }

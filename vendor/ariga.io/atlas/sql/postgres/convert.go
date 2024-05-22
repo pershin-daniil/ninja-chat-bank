@@ -37,6 +37,11 @@ func FormatType(t schema.Type) (string, error) {
 		f = strings.ToLower(t.T)
 	case *CurrencyType:
 		f = strings.ToLower(t.T)
+	case *CompositeType:
+		if t.T == "" {
+			return "", errors.New("postgres: missing composite type name")
+		}
+		f = t.T
 	case *DomainType:
 		if t.T == "" {
 			return "", errors.New("postgres: missing domain type name")
@@ -67,7 +72,7 @@ func FormatType(t schema.Type) (string, error) {
 		}
 	case *schema.StringType:
 		switch f = strings.ToLower(t.T); f {
-		case TypeText, typeName:
+		case TypeText, TypeBPChar, typeName:
 		// CHAR(n) is alias for CHARACTER(n). If not length was
 		// specified, the definition is equivalent to CHARACTER(1).
 		case TypeChar, TypeCharacter:
@@ -217,7 +222,10 @@ func columnType(c *columnDesc) (schema.Type, error) {
 		typ = &schema.BoolType{T: t}
 	case TypeBytea:
 		typ = &schema.BinaryType{T: t}
-	case TypeCharacter, TypeChar, TypeCharVar, TypeVarChar, TypeText, typeName:
+	case TypeCharacter, TypeChar, TypeCharVar, TypeVarChar, TypeText, TypeBPChar, typeName:
+		if t == TypeCharacter && c.size == 0 && c.fmtype == TypeBPChar {
+			t = TypeBPChar
+		}
 		// A `character` column without length specifier is equivalent to `character(1)`,
 		// but `varchar` without length accepts strings of any size (same as `text`).
 		typ = &schema.StringType{T: t, Size: int(c.size)}
@@ -270,11 +278,6 @@ func columnType(c *columnDesc) (schema.Type, error) {
 			if err != nil {
 				return nil, err
 			}
-			if c.elemtyp == "e" {
-				// Override the element type in
-				// case it is an enum.
-				tt = newEnumType(t, c.typelem)
-			}
 			typ.(*ArrayType).Type = tt
 		}
 	case TypeTSVector, TypeTSQuery:
@@ -288,19 +291,14 @@ func columnType(c *columnDesc) (schema.Type, error) {
 	case TypeUserDefined:
 		typ = &UserDefinedType{T: c.fmtype}
 	case typeAny, typeAnyElement, typeAnyArray, typeAnyNonArray, typeAnyEnum, typeInternal,
-		typeRecord, typeTrigger, typeVoid, typeUnknown:
+		typeRecord, typeTrigger, typeEventTrigger, typeVoid, typeUnknown:
 		typ = &PseudoType{T: t}
 	default:
 		typ = &schema.UnsupportedType{T: t}
 	}
 	switch c.typtype {
-	case "e":
-		// The `typtype` column is set to 'e' for enum types, and the
-		// values are filled in batch after the rows above is closed.
-		// https://postgresql.org/docs/current/catalog-pg-type.html
-		typ = newEnumType(c.fmtype, c.typid)
-	case "d":
-		// Use user-defined for domain types as not all atlas versions support it.
+	case "d", "e":
+		// User-defined types supported by Atlas.
 		typ = &UserDefinedType{T: c.fmtype}
 	}
 	return typ, nil
@@ -339,7 +337,6 @@ type columnDesc struct {
 	size          int64  // character_maximum_length
 	typtype       string // pg_type.typtype
 	typelem       int64  // pg_type.typelem
-	elemtyp       string // pg_type.typtype of the array element type above.
 	typid         int64  // pg_type.oid
 	precision     int64
 	timePrecision *int64

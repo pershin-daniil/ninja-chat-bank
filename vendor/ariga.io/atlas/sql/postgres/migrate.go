@@ -63,7 +63,6 @@ type state struct {
 	*conn
 	migrate.Plan
 	migrate.PlanOptions
-	droppedT []*schema.Table
 }
 
 // Exec executes the changes on the database. An error is returned
@@ -78,10 +77,10 @@ func (s *state) plan(changes []schema.Change) error {
 	if err != nil {
 		return err
 	}
-	if planned, err = sqlx.DetachCycles(planned); err != nil {
+	if planned, err = detachCycles(planned); err != nil {
 		return err
 	}
-	for _, c := range sqlx.SortChanges(planned) {
+	for _, c := range s.sortChanges(planned) {
 		switch c := c.(type) {
 		case *schema.AddTable:
 			err = s.addTable(c)
@@ -237,6 +236,16 @@ func (s *state) addTable(add *schema.AddTable) error {
 				errs = append(errs, err.Error())
 			}
 		}
+		for _, idx := range add.T.Indexes {
+			_, okU := uniqueConst(idx.Attrs)
+			_, okE := excludeConst(idx.Attrs)
+			if okU || okE {
+				b.Comma().NL()
+				if err := s.constraint(b, idx); err != nil {
+					errs = append(errs, err.Error())
+				}
+			}
+		}
 		if len(add.T.ForeignKeys) > 0 {
 			b.Comma()
 			s.fks(b, add.T.ForeignKeys...)
@@ -265,9 +274,13 @@ func (s *state) addTable(add *schema.AddTable) error {
 		Reverse: s.Build("DROP TABLE").Table(add.T).String(),
 	})
 	for _, idx := range add.T.Indexes {
-		// Indexes do not need to be created concurrently on new tables.
-		if err := s.addIndexes(add, add.T, &schema.AddIndex{I: idx}); err != nil {
-			return err
+		_, okU := uniqueConst(idx.Attrs)
+		_, okE := excludeConst(idx.Attrs)
+		if !okU && !okE {
+			// Indexes do not need to be created concurrently on new tables.
+			if err := s.addIndexes(add, add.T, &schema.AddIndex{I: idx}); err != nil {
+				return err
+			}
 		}
 	}
 	s.addComments(add, add.T)
@@ -277,7 +290,6 @@ func (s *state) addTable(add *schema.AddTable) error {
 // dropTable builds and executes the query for dropping a table from a schema.
 func (s *state) dropTable(drop *schema.DropTable) error {
 	cmd := &changeGroup{}
-	s.droppedT = append(s.droppedT, drop.T)
 	rs := &state{
 		conn:        s.conn,
 		PlanOptions: s.PlanOptions,
@@ -336,11 +348,21 @@ func (s *state) modifyTable(modify *schema.ModifyTable) error {
 			if c := (schema.Comment{}); sqlx.Has(change.I.Attrs, &c) {
 				changes = append(changes, s.indexComment(modify, modify.T, change.I, c.Text, ""))
 			}
-			addI = append(addI, change)
+			_, okU := uniqueConst(change.I.Attrs)
+			_, okE := excludeConst(change.I.Attrs)
+			// Unlike ADD INDEX statements that are executed separately,
+			// ADD CONSTRAINT are added to the ALTER TABLE statement below.
+			if okU || okE {
+				alter = append(alter, change)
+			} else {
+				addI = append(addI, change)
+			}
 		case *schema.DropIndex:
+			_, okU := uniqueConst(change.I.Attrs)
+			_, okE := excludeConst(change.I.Attrs)
 			// Unlike DROP INDEX statements that are executed separately,
 			// DROP CONSTRAINT are added to the ALTER TABLE statement below.
-			if isUniqueConstraint(change.I) {
+			if okU || okE {
 				alter = append(alter, change)
 			} else {
 				dropI = append(dropI, change)
@@ -366,9 +388,25 @@ func (s *state) modifyTable(modify *schema.ModifyTable) error {
 					continue
 				}
 			}
-			// Index modification requires rebuilding the index.
-			addI = append(addI, &schema.AddIndex{I: change.To})
-			dropI = append(dropI, &schema.DropIndex{I: change.From})
+			if addU, ok := indexToUnique(change); ok {
+				alter = append(alter, addU)
+				continue
+			}
+			// Index (or constraint) modification requires rebuilding the index.
+			_, fromU := uniqueConst(change.From.Attrs)
+			_, fromE := excludeConst(change.From.Attrs)
+			if fromU || fromE {
+				alter = append(alter, &schema.DropIndex{I: change.From})
+			} else {
+				dropI = append(dropI, &schema.DropIndex{I: change.From})
+			}
+			_, toU := uniqueConst(change.To.Attrs)
+			_, toE := excludeConst(change.To.Attrs)
+			if toU || toE {
+				alter = append(alter, &schema.AddIndex{I: change.To})
+			} else {
+				addI = append(addI, &schema.AddIndex{I: change.To})
+			}
 		case *schema.RenameIndex:
 			changes = append(changes, &migrate.Change{
 				Source:  change,
@@ -402,7 +440,7 @@ func (s *state) modifyTable(modify *schema.ModifyTable) error {
 					continue
 				}
 			}
-			alter = append(alter, &schema.ModifyColumn{To: change.To, From: change.From, Change: k})
+			alter = append(alter, &schema.ModifyColumn{To: change.To, From: change.From, Change: k, Extra: change.Extra})
 		case *schema.RenameColumn:
 			// "RENAME COLUMN" cannot be combined with other alterations.
 			b := s.Build("ALTER TABLE").Table(modify.T).P("RENAME COLUMN")
@@ -431,6 +469,25 @@ func (s *state) modifyTable(modify *schema.ModifyTable) error {
 	s.append(changes...)
 	return nil
 }
+
+type (
+	// AddUniqueConstraint to the table using the given index. Note, if the index
+	// name does not match the unique constraint name, PostgreSQL implicitly renames
+	// it to the constraint name.
+	AddUniqueConstraint struct {
+		schema.Change
+		Name  string        // Name of the constraint.
+		Using *schema.Index // Index to use for the constraint.
+	}
+	// AddPKConstraint to the table using the given index. Note, if the index
+	// name does not match the primary-key constraint name, PostgreSQL implicitly
+	// renames it to the constraint name.
+	AddPKConstraint struct {
+		schema.Change
+		Name  string        // Name of the constraint.
+		Using *schema.Index // Index to use for the constraint.
+	}
+)
 
 // alterTable modifies the given table by executing on it a list of changes in one SQL statement.
 func (s *state) alterTable(t *schema.Table, changes []schema.Change) error {
@@ -467,13 +524,36 @@ func (s *state) alterTable(t *schema.Table, changes []schema.Change) error {
 			case *schema.DropColumn:
 				b.P("DROP COLUMN").Ident(change.C.Name)
 				reverse = append(reverse, &schema.AddColumn{C: change.C})
+			case *AddUniqueConstraint:
+				b.P("ADD")
+				drop := change.Using
+				if change.Name != "" {
+					b.P("CONSTRAINT").Ident(change.Name)
+					drop = sqlx.P(*change.Using)
+					drop.Name = change.Name
+				}
+				b.P("UNIQUE USING INDEX").Ident(change.Using.Name)
+				// Translated to the DROP CONSTRAINT below,
+				// which drops the index as well.
+				reverse = append(reverse, &schema.DropIndex{I: drop})
+			case *AddPKConstraint:
+				b.P("ADD")
+				drop := change.Using
+				if change.Name != "" {
+					b.P("CONSTRAINT").Ident(change.Name)
+					drop = sqlx.P(*change.Using)
+					drop.Name = change.Name
+				}
+				b.P("PRIMARY KEY USING INDEX").Ident(change.Using.Name)
+				// Translated to the DROP CONSTRAINT below,
+				// which drops the index as well.
+				reverse = append(reverse, &schema.DropPrimaryKey{P: drop})
 			case *schema.AddIndex:
-				// Skip reversing this operation as it is the inverse of
-				// the operation above and should not be used besides this.
-				b.P("ADD CONSTRAINT").Ident(change.I.Name).P("UNIQUE")
-				if err := s.indexParts(b, change.I); err != nil {
+				b.P("ADD")
+				if err := s.constraint(b, change.I); err != nil {
 					return err
 				}
+				reverse = append(reverse, &schema.DropIndex{I: change.I})
 			case *schema.DropIndex:
 				b.P("DROP CONSTRAINT").Ident(change.I.Name)
 				reverse = append(reverse, &schema.AddIndex{I: change.I})
@@ -487,14 +567,23 @@ func (s *state) alterTable(t *schema.Table, changes []schema.Change) error {
 				b.P("DROP CONSTRAINT").Ident(pkName(t, change.P))
 				reverse = append(reverse, &schema.AddPrimaryKey{P: change.P})
 			case *schema.AddForeignKey:
-				b.P("ADD")
-				s.fks(b, change.F)
+				s.fks(b.P("ADD"), change.F)
+				if sqlx.Has(change.Extra, &NotValid{}) {
+					b.P("NOT VALID")
+				}
 				reverse = append(reverse, &schema.DropForeignKey{F: change.F})
 			case *schema.DropForeignKey:
-				b.P("DROP CONSTRAINT").Ident(change.F.Symbol)
+				b.P("DROP CONSTRAINT")
+				if sqlx.Has(change.Extra, &schema.IfExists{}) {
+					b.P("IF EXISTS")
+				}
+				b.Ident(change.F.Symbol)
 				reverse = append(reverse, &schema.AddForeignKey{F: change.F})
 			case *schema.AddCheck:
 				check(b.P("ADD"), change.C)
+				if sqlx.Has(change.Extra, &NotValid{}) {
+					b.P("NOT VALID")
+				}
 				// Reverse operation is supported if
 				// the constraint name is not generated.
 				if reversible = reversible && change.C.Name != ""; reversible {
@@ -706,6 +795,9 @@ func (s *state) alterType(b *sqlx.Builder, alter *changeGroup, t *schema.Table, 
 	if collate := (schema.Collation{}); sqlx.Has(c.To.Attrs, &collate) {
 		b.P("COLLATE", collate.V)
 	}
+	if using := (ConvertUsing{}); sqlx.Has(c.Extra, &using) {
+		b.P("USING", using.X)
+	}
 	return nil
 }
 
@@ -768,7 +860,7 @@ func (s *state) columnComment(src schema.Change, t *schema.Table, c *schema.Colu
 }
 
 func (s *state) indexComment(src schema.Change, t *schema.Table, idx *schema.Index, to, from string) *migrate.Change {
-	b := s.Build("COMMENT ON INDEX").Ident(idx.Name).P("IS")
+	b := s.Build("COMMENT ON INDEX").SchemaResource(t.Schema, idx.Name).P("IS")
 	return &migrate.Change{
 		Cmd:     b.Clone().P(quote(to)).String(),
 		Source:  src,
@@ -898,7 +990,7 @@ func (s *state) column(b *sqlx.Builder, c *schema.Column) error {
 	s.columnDefault(b, c)
 	for _, attr := range c.Attrs {
 		switch a := attr.(type) {
-		case *schema.Comment:
+		case *schema.Comment, *schema.Check:
 		case *schema.Collation:
 			b.P("COLLATE").Ident(a.V)
 		case *Identity, *schema.GeneratedExpr:
@@ -1003,8 +1095,20 @@ func (s *state) partAttrs(b *sqlx.Builder, idx *schema.Index, p *schema.IndexPar
 			}
 		// Handled above.
 		case *IndexOpClass, *schema.Collation:
+		// Handled below.
+		case *Operator:
 		default:
 			return fmt.Errorf("postgres: unexpected index part attribute: %T", attr)
+		}
+	}
+	if _, isE := excludeConst(idx.Attrs); isE {
+		switch op := (&Operator{}); {
+		case !sqlx.Has(p.Attrs, op):
+			return fmt.Errorf("missing operator for exclude constraint %q", idx.Name)
+		case op.Name == "":
+			return fmt.Errorf("empty operator for exclude constraint %q", idx.Name)
+		default:
+			b.P("WITH", op.Name)
 		}
 	}
 	return nil
@@ -1083,14 +1187,50 @@ func (s *state) fks(b *sqlx.Builder, fks ...*schema.ForeignKey) {
 	})
 }
 
+func (s *state) constraint(b *sqlx.Builder, idx *schema.Index) error {
+	if _, isU := uniqueConst(idx.Attrs); isU {
+		return s.unique(b, idx)
+	}
+	if _, isE := excludeConst(idx.Attrs); isE {
+		return s.exclude(b, idx)
+	}
+	return fmt.Errorf("unexpected constraint type for index %q", idx.Name)
+}
+
+func (s *state) unique(b *sqlx.Builder, idx *schema.Index) error {
+	c, ok := uniqueConst(idx.Attrs)
+	if !ok {
+		return fmt.Errorf("index %q is not a unique constraint", idx.Name)
+	}
+	name := c.N
+	if name == "" {
+		name = idx.Name
+	}
+	b.P("CONSTRAINT").Ident(name).P("UNIQUE")
+	return s.index(b, idx)
+}
+
+func (s *state) exclude(b *sqlx.Builder, idx *schema.Index) error {
+	c, ok := excludeConst(idx.Attrs)
+	if !ok {
+		return fmt.Errorf("index %q is not an exclude constraint", idx.Name)
+	}
+	name := c.N
+	if name == "" {
+		name = idx.Name
+	}
+	b.P("CONSTRAINT").Ident(name).P("EXCLUDE")
+	return s.index(b, idx)
+}
+
 func (s *state) append(c ...*migrate.Change) {
 	s.Changes = append(s.Changes, c...)
 }
 
 // Build instantiates a new builder and writes the given phrase to it.
 func (s *state) Build(phrases ...string) *sqlx.Builder {
-	b := &sqlx.Builder{QuoteOpening: '"', QuoteClosing: '"', Schema: s.SchemaQualifier, Indent: s.Indent}
-	return b.P(phrases...)
+	return (*Driver).StmtBuilder(nil, s.PlanOptions).
+		P(phrases...)
 }
 
 // skipAutoChanges filters unnecessary changes that are automatically
@@ -1166,41 +1306,6 @@ func check(b *sqlx.Builder, c *schema.Check) {
 	}
 }
 
-// isUniqueConstraint reports if the index is a valid UNIQUE constraint.
-func isUniqueConstraint(i *schema.Index) bool {
-	hasC := func() bool {
-		for _, a := range i.Attrs {
-			if c, ok := a.(*Constraint); ok && c.IsUnique() {
-				return true
-			}
-		}
-		return false
-	}()
-	if !hasC || !i.Unique {
-		return false
-	}
-	// UNIQUE constraint cannot use functional indexes,
-	// and all its parts must have the default sort ordering.
-	for _, p := range i.Parts {
-		if p.X != nil || p.Desc {
-			return false
-		}
-	}
-	for _, a := range i.Attrs {
-		switch a := a.(type) {
-		// UNIQUE constraints must have BTREE type indexes.
-		case *IndexType:
-			if strings.ToUpper(a.T) != IndexTypeBTree {
-				return false
-			}
-		// Partial indexes are not allowed.
-		case *IndexPredicate:
-			return false
-		}
-	}
-	return true
-}
-
 func quote(s string) string {
 	if sqlx.IsQuoted(s, '\'') {
 		return s
@@ -1227,6 +1332,10 @@ func (s *state) enumIdent(e *schema.EnumType) string {
 
 func (s *state) domainIdent(d *DomainType) string {
 	return s.typeIdent(d.Schema, d.T)
+}
+
+func (s *state) compositeIdent(c *CompositeType) string {
+	return s.typeIdent(c.Schema, c.T)
 }
 
 func (s *state) typeIdent(ns *schema.Schema, name string) string {
@@ -1263,12 +1372,16 @@ func (s *state) formatType(t schema.Type) (string, error) {
 		return s.enumIdent(t), nil
 	case *DomainType:
 		return s.domainIdent(t), nil
+	case *CompositeType:
+		return s.compositeIdent(t), nil
 	case *ArrayType:
 		switch t := t.Type.(type) {
 		case *schema.EnumType:
 			return s.enumIdent(t) + "[]", nil
 		case *DomainType:
 			return s.domainIdent(t) + "[]", nil
+		case *CompositeType:
+			return s.compositeIdent(t) + "[]", nil
 		}
 	}
 	return FormatType(t)

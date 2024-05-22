@@ -53,6 +53,12 @@ func (d *diff) SchemaAttrDiff(from, to *schema.Schema) []schema.Change {
 	return changes
 }
 
+// RealmObjectDiff returns a changeset for migrating realm (database) objects
+// from one state to the other. For example, adding extensions or users.
+func (*diff) RealmObjectDiff(_, _ *schema.Realm) ([]schema.Change, error) {
+	return nil, nil
+}
+
 // SchemaObjectDiff returns a changeset for migrating schema objects from
 // one state to the other.
 func (*diff) SchemaObjectDiff(_, _ *schema.Schema) ([]schema.Change, error) {
@@ -219,12 +225,20 @@ func (d *diff) Normalize(from, to *schema.Table) error {
 	}
 	from.Indexes = indexes
 
-	// Avoid proposing changes to the table COLLATE or CHARSET
-	// in case only one of these properties is defined.
-	if err := d.defaultCollate(&to.Attrs); err != nil {
-		return err
+	// In case the "current" state was inspected (or loaded) with the collation/charset attributes,
+	// but there are not found on the desired state, detect what are the default settings for the
+	// desired state of the table (based on database default) to avoid proposing unnecessary changes.
+	if sqlx.Has(from.Attrs, &schema.Collation{}) {
+		if err := d.defaultCollate(&to.Attrs); err != nil {
+			return err
+		}
 	}
-	return d.defaultCharset(&to.Attrs)
+	if sqlx.Has(from.Attrs, &schema.Charset{}) {
+		if err := d.defaultCharset(&to.Attrs); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // FindTable implements the DiffDriver.TableFinder method in order to provide
@@ -444,7 +458,7 @@ func (d *diff) typeChanged(from, to *schema.Column) (bool, error) {
 	var changed bool
 	switch fromT := fromT.(type) {
 	case *BitType, *schema.BinaryType, *schema.BoolType, *schema.DecimalType, *schema.FloatType,
-		*schema.JSONType, *schema.StringType, *schema.SpatialType, *schema.TimeType, *schema.UUIDType:
+		*schema.JSONType, *schema.StringType, *schema.SpatialType, *schema.TimeType, *schema.UUIDType, *NetworkType:
 		ft, err := FormatType(fromT)
 		if err != nil {
 			return false, err

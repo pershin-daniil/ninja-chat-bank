@@ -6,6 +6,7 @@ package schemahcl
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -29,8 +30,11 @@ type (
 		pathVars         map[string]map[string]cty.Value
 		pathFuncs        map[string]map[string]function.Function
 		validator        func() SchemaValidator
-		datasrc, initblk map[string]func(*hcl.EvalContext, *hclsyntax.Block) (cty.Value, error)
-		typedblk         map[string]map[string]func(*hcl.EvalContext, *hclsyntax.Block) (cty.Value, error)
+		datasrc, initblk map[string]BlockFunc
+		typedblk         map[string]map[string]BlockFunc
+		// Optional context to pass to dynamic block handlers,
+		// such as data-sources, type-blocks, etc.
+		ctx context.Context
 	}
 	// Option configures a Config.
 	Option func(*Config)
@@ -58,6 +62,15 @@ func New(opts ...Option) *State {
 				Functions: cfg.funcs,
 			})
 		},
+	}
+}
+
+// WithContext allows passing a context to Eval stage.
+// If provided, data source and type-block handlers will
+// have access to this context.
+func WithContext(ctx context.Context) Option {
+	return func(c *Config) {
+		c.ctx = ctx
 	}
 }
 
@@ -109,6 +122,9 @@ func WithFunctions(funcs map[string]function.Function) Option {
 	}
 }
 
+// BlockFunc is the function signature for evaluating a dynamic block.
+type BlockFunc func(context.Context, *hcl.EvalContext, *hclsyntax.Block) (cty.Value, error)
+
 // WithDataSource registers a data source name and its corresponding handler.
 // e.g., the example below registers a data source named "text" that returns
 // the string defined in the data source block.
@@ -128,10 +144,10 @@ func WithFunctions(funcs map[string]function.Function) Option {
 //	data "text" "hello" {
 //	  value = "hello world"
 //	}
-func WithDataSource(name string, h func(*hcl.EvalContext, *hclsyntax.Block) (cty.Value, error)) Option {
+func WithDataSource(name string, h BlockFunc) Option {
 	return func(c *Config) {
 		if c.datasrc == nil {
-			c.datasrc = make(map[string]func(*hcl.EvalContext, *hclsyntax.Block) (cty.Value, error))
+			c.datasrc = make(map[string]BlockFunc)
 		}
 		c.datasrc[name] = h
 	}
@@ -156,13 +172,13 @@ func WithDataSource(name string, h func(*hcl.EvalContext, *hclsyntax.Block) (cty
 //	driver "remote" "hello" {
 //	  token = "hello world"
 //	}
-func WithTypeLabelBlock(name, label string, h func(*hcl.EvalContext, *hclsyntax.Block) (cty.Value, error)) Option {
+func WithTypeLabelBlock(name, label string, h BlockFunc) Option {
 	return func(c *Config) {
 		if c.typedblk == nil {
-			c.typedblk = make(map[string]map[string]func(*hcl.EvalContext, *hclsyntax.Block) (cty.Value, error))
+			c.typedblk = make(map[string]map[string]BlockFunc)
 		}
 		if c.typedblk[name] == nil {
-			c.typedblk[name] = make(map[string]func(*hcl.EvalContext, *hclsyntax.Block) (cty.Value, error))
+			c.typedblk[name] = make(map[string]BlockFunc)
 		}
 		c.typedblk[name][label] = h
 	}
@@ -182,10 +198,10 @@ func WithTypeLabelBlock(name, label string, h func(*hcl.EvalContext, *hclsyntax.
 //		}
 //		return cty.ObjectVal(map[string]cty.Value{"modules": v}), nil
 //	})
-func WithInitBlock(name string, h func(*hcl.EvalContext, *hclsyntax.Block) (cty.Value, error)) Option {
+func WithInitBlock(name string, h BlockFunc) Option {
 	return func(c *Config) {
 		if c.initblk == nil {
-			c.initblk = make(map[string]func(*hcl.EvalContext, *hclsyntax.Block) (cty.Value, error))
+			c.initblk = make(map[string]BlockFunc)
 		}
 		c.initblk[name] = h
 	}
@@ -295,13 +311,13 @@ func (s *State) EvalFiles(paths []string, v any, input map[string]cty.Value) err
 // using the result.
 func (s *State) Eval(parsed *hclparse.Parser, v any, input map[string]cty.Value) error {
 	var (
+		hasVars      bool
 		ctx          = s.newCtx()
 		files        = parsed.Files()
 		fileNames    = make([]string, 0, len(files))
 		metaBlocks   = make(map[string][]*hclsyntax.Block, len(files))
 		staticBlocks = make([]*hclsyntax.Block, 0, len(files))
 		reg          = &blockDef{
-			fields:   make(map[string]struct{}),
 			children: make(map[string]*blockDef),
 		}
 	)
@@ -321,11 +337,12 @@ func (s *State) Eval(parsed *hclparse.Parser, v any, input map[string]cty.Value)
 		for _, b := range body.Blocks {
 			switch {
 			case b.Type == BlockVariable:
+				hasVars = true
 			case b.Body != nil && b.Body.Attributes[forEachAttr] != nil:
 				metaBlocks[name] = append(metaBlocks[name], b)
 			default:
 				blocks = append(blocks, b)
-				reg.child(extractDef(b, reg))
+				reg.addChild(b, 0)
 			}
 		}
 		body.Blocks = blocks
@@ -348,7 +365,7 @@ func (s *State) Eval(parsed *hclparse.Parser, v any, input map[string]cty.Value)
 					return err
 				}
 				// Extract the definition of the top-level is enough.
-				reg.child(extractDef(b, reg))
+				reg.addChild(b, 0)
 				blocks = append(blocks, nb...)
 				files[name].Body.(*hclsyntax.Body).Blocks = append(files[name].Body.(*hclsyntax.Body).Blocks, nb...)
 			}
@@ -381,7 +398,7 @@ func (s *State) Eval(parsed *hclparse.Parser, v any, input map[string]cty.Value)
 	}
 	for _, name := range fileNames {
 		file := files[name]
-		r, err := s.resource(ctx, vr, file)
+		r, err := s.resource(ctx, vr, file, reg)
 		if err != nil {
 			return err
 		}
@@ -392,8 +409,13 @@ func (s *State) Eval(parsed *hclparse.Parser, v any, input map[string]cty.Value)
 	if err := vr.Err(); err != nil {
 		return err
 	}
-	if err := patchRefs(spec); err != nil {
-		return err
+	// Has variables with or without default values.
+	if hasVars {
+		// In case some blocks get their names dynamically (e.g., name = var.x),
+		// we need to update the references from the stub label to its final name.
+		if err := patchRefs(spec); err != nil {
+			return err
+		}
 	}
 	if err := spec.As(v); err != nil {
 		return fmt.Errorf("schemahcl: failed reading spec as %T: %w", v, err)
@@ -431,7 +453,7 @@ func (r addrRef) patch(resource *Resource) error {
 		if !ok {
 			return fmt.Errorf("broken reference to %q", ref.V)
 		}
-		if name, err := referenced.FinalName(); err == nil {
+		if name, err := referenced.FinalName(); err == nil && name != referenced.Name {
 			ref.V = strings.ReplaceAll(ref.V, referenced.Name, name)
 		}
 	}
@@ -462,7 +484,7 @@ func (r addrRef) load(res *Resource, track string) addrRef {
 }
 
 // resource converts the hcl file to a schemahcl.Resource.
-func (s *State) resource(ctx *hcl.EvalContext, vr SchemaValidator, file *hcl.File) (*Resource, error) {
+func (s *State) resource(ctx *hcl.EvalContext, vr SchemaValidator, file *hcl.File, dec *blockDef) (*Resource, error) {
 	body, ok := file.Body.(*hclsyntax.Body)
 	if !ok {
 		return nil, fmt.Errorf("schemahcl: expected remainder to be of type *hclsyntax.Body")
@@ -484,11 +506,12 @@ func (s *State) resource(ctx *hcl.EvalContext, vr SchemaValidator, file *hcl.Fil
 		if blk.Type == BlockVariable {
 			continue
 		}
-		ctx, err := setBlockVars(ctx.NewChild(), blk.Body)
+		cdec := dec.child(blk.Type)
+		ctx, err := setLocalVars(ctx.NewChild(), blk.Body, cdec)
 		if err != nil {
 			return nil, err
 		}
-		resource, err := s.toResource(ctx, vr, blk, []string{blk.Type})
+		resource, err := s.toResource(ctx, vr, blk, []string{blk.Type}, dec.children[blk.Type])
 		if err != nil {
 			return nil, err
 		}
@@ -498,6 +521,35 @@ func (s *State) resource(ctx *hcl.EvalContext, vr SchemaValidator, file *hcl.Fil
 		return nil, err
 	}
 	return res, nil
+}
+
+// setLocalVars extends the context with the local block variables (references) so they
+// can be referenced in later stages. For example, an index block may reference its sibling
+// column blocks by their names:
+//
+//	table "t" {
+//	  column "c1" { ... }
+//	  index "i1" { columns = [column.c1] }
+//	}
+func setLocalVars(ctx *hcl.EvalContext, b *hclsyntax.Body, dec *blockDef) (*hcl.EvalContext, error) {
+	vars, err := blockVars(b.Blocks, "", dec)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case ctx.Variables == nil:
+		ctx.Variables = vars
+	case len(ctx.Variables) >= len(vars):
+		for k, v := range vars {
+			ctx.Variables[k] = v
+		}
+	default:
+		for k, v := range ctx.Variables {
+			vars[k] = v
+		}
+		ctx.Variables = vars
+	}
+	return ctx, nil
 }
 
 // mayScopeContext returns a new limited context for the given scope with access only
@@ -545,6 +597,9 @@ func (s *State) toAttrs(ctx *hcl.EvalContext, vr SchemaValidator, hclAttrs hclsy
 			for it := value.ElementIterator(); it.Next(); {
 				_, v := it.Element()
 				if isRef(v) {
+					if !v.Type().HasAttribute("__ref") {
+						return nil, fmt.Errorf("%s: invalid reference used in %s", hclAttr.SrcRange, hclAttr.Name)
+					}
 					v = cty.CapsuleVal(ctyRefType, &Ref{V: v.GetAttr("__ref").AsString()})
 				}
 				if vt != cty.NilType && vt != v.Type() {
@@ -559,7 +614,6 @@ func (s *State) toAttrs(ctx *hcl.EvalContext, vr SchemaValidator, hclAttrs hclsy
 		}
 		attrs = append(attrs, at)
 	}
-	// hclsyntax.Attrs is an alias for map[string]*Attribute
 	sort.Slice(attrs, func(i, j int) bool {
 		return attrs[i].K < attrs[j].K
 	})
@@ -634,7 +688,7 @@ func isOneRef(v cty.Value) bool {
 	return t.IsObjectType() && t.HasAttribute("__ref")
 }
 
-func (s *State) toResource(ctx *hcl.EvalContext, vr SchemaValidator, block *hclsyntax.Block, scope []string) (spec *Resource, err error) {
+func (s *State) toResource(ctx *hcl.EvalContext, vr SchemaValidator, block *hclsyntax.Block, scope []string, dec *blockDef) (spec *Resource, err error) {
 	closeScope, err := vr.ValidateBlock(ctx, block)
 	if err != nil {
 		return nil, err
@@ -657,11 +711,12 @@ func (s *State) toResource(ctx *hcl.EvalContext, vr SchemaValidator, block *hcls
 	}
 	spec.Attrs = attrs
 	for _, blk := range block.Body.Blocks {
-		ctx, err := setBlockVars(ctx.NewChild(), blk.Body)
+		cdec := dec.child(blk.Type)
+		ctx, err := setLocalVars(ctx.NewChild(), blk.Body, cdec)
 		if err != nil {
 			return nil, err
 		}
-		r, err := s.toResource(ctx, vr, blk, append(scope, blk.Type))
+		r, err := s.toResource(ctx, vr, blk, append(scope, blk.Type), cdec)
 		if err != nil {
 			return nil, err
 		}
@@ -1031,7 +1086,7 @@ func typeFuncSpec(typeSpec *TypeSpec) function.Function {
 
 // typeFuncSpecImpl returns the function implementation for the HCL function spec.
 func typeFuncSpecImpl(_ *function.Spec, typeSpec *TypeSpec) function.ImplFunc {
-	return func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+	return func(args []cty.Value, _ cty.Type) (cty.Value, error) {
 		t := &Type{
 			T: typeSpec.T,
 		}

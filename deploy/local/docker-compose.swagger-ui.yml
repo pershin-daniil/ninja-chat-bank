@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   swagger-ui:
     image: swaggerapi/swagger-ui
@@ -8,6 +6,6 @@ services:
       - "127.0.0.1:3011:8080"
     environment:
       SWAGGER_JSON: "/api/client.v1.swagger.yml"
-      URLS: "[{url: 'client.v1.swagger.yml', name: 'client.v1.swagger'}]"
+      URLS: "[{url: 'client.v1.swagger.yml', name: 'client.v1.swagger'},{url: 'manager.v1.swagger.yml', name: 'manager.v1.swagger'}]"
     volumes:
       - ../../api:/api

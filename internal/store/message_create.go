@@ -26,20 +26,6 @@ type MessageCreate struct {
 	conflict []sql.ConflictOption
 }
 
-// SetAuthorID sets the "author_id" field.
-func (mc *MessageCreate) SetAuthorID(ti types.UserID) *MessageCreate {
-	mc.mutation.SetAuthorID(ti)
-	return mc
-}
-
-// SetNillableAuthorID sets the "author_id" field if the given value is not nil.
-func (mc *MessageCreate) SetNillableAuthorID(ti *types.UserID) *MessageCreate {
-	if ti != nil {
-		mc.SetAuthorID(*ti)
-	}
-	return mc
-}
-
 // SetChatID sets the "chat_id" field.
 func (mc *MessageCreate) SetChatID(ti types.ChatID) *MessageCreate {
 	mc.mutation.SetChatID(ti)
@@ -52,16 +38,16 @@ func (mc *MessageCreate) SetProblemID(ti types.ProblemID) *MessageCreate {
 	return mc
 }
 
-// SetInitialRequestID sets the "initial_request_id" field.
-func (mc *MessageCreate) SetInitialRequestID(ti types.RequestID) *MessageCreate {
-	mc.mutation.SetInitialRequestID(ti)
+// SetAuthorID sets the "author_id" field.
+func (mc *MessageCreate) SetAuthorID(ti types.UserID) *MessageCreate {
+	mc.mutation.SetAuthorID(ti)
 	return mc
 }
 
-// SetNillableInitialRequestID sets the "initial_request_id" field if the given value is not nil.
-func (mc *MessageCreate) SetNillableInitialRequestID(ti *types.RequestID) *MessageCreate {
+// SetNillableAuthorID sets the "author_id" field if the given value is not nil.
+func (mc *MessageCreate) SetNillableAuthorID(ti *types.UserID) *MessageCreate {
 	if ti != nil {
-		mc.SetInitialRequestID(*ti)
+		mc.SetAuthorID(*ti)
 	}
 	return mc
 }
@@ -142,6 +128,12 @@ func (mc *MessageCreate) SetNillableIsService(b *bool) *MessageCreate {
 	return mc
 }
 
+// SetInitialRequestID sets the "initial_request_id" field.
+func (mc *MessageCreate) SetInitialRequestID(ti types.RequestID) *MessageCreate {
+	mc.mutation.SetInitialRequestID(ti)
+	return mc
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (mc *MessageCreate) SetCreatedAt(t time.Time) *MessageCreate {
 	mc.mutation.SetCreatedAt(t)
@@ -170,14 +162,14 @@ func (mc *MessageCreate) SetNillableID(ti *types.MessageID) *MessageCreate {
 	return mc
 }
 
-// SetProblem sets the "problem" edge to the Problem entity.
-func (mc *MessageCreate) SetProblem(p *Problem) *MessageCreate {
-	return mc.SetProblemID(p.ID)
-}
-
 // SetChat sets the "chat" edge to the Chat entity.
 func (mc *MessageCreate) SetChat(c *Chat) *MessageCreate {
 	return mc.SetChatID(c.ID)
+}
+
+// SetProblem sets the "problem" edge to the Problem entity.
+func (mc *MessageCreate) SetProblem(p *Problem) *MessageCreate {
+	return mc.SetProblemID(p.ID)
 }
 
 // Mutation returns the MessageMutation object of the builder.
@@ -215,10 +207,6 @@ func (mc *MessageCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (mc *MessageCreate) defaults() {
-	if _, ok := mc.mutation.InitialRequestID(); !ok {
-		v := message.DefaultInitialRequestID()
-		mc.mutation.SetInitialRequestID(v)
-	}
 	if _, ok := mc.mutation.IsVisibleForClient(); !ok {
 		v := message.DefaultIsVisibleForClient
 		mc.mutation.SetIsVisibleForClient(v)
@@ -247,11 +235,6 @@ func (mc *MessageCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (mc *MessageCreate) check() error {
-	if v, ok := mc.mutation.AuthorID(); ok {
-		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "author_id", err: fmt.Errorf(`store: validator failed for field "Message.author_id": %w`, err)}
-		}
-	}
 	if _, ok := mc.mutation.ChatID(); !ok {
 		return &ValidationError{Name: "chat_id", err: errors.New(`store: missing required field "Message.chat_id"`)}
 	}
@@ -268,12 +251,9 @@ func (mc *MessageCreate) check() error {
 			return &ValidationError{Name: "problem_id", err: fmt.Errorf(`store: validator failed for field "Message.problem_id": %w`, err)}
 		}
 	}
-	if _, ok := mc.mutation.InitialRequestID(); !ok {
-		return &ValidationError{Name: "initial_request_id", err: errors.New(`store: missing required field "Message.initial_request_id"`)}
-	}
-	if v, ok := mc.mutation.InitialRequestID(); ok {
+	if v, ok := mc.mutation.AuthorID(); ok {
 		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "initial_request_id", err: fmt.Errorf(`store: validator failed for field "Message.initial_request_id": %w`, err)}
+			return &ValidationError{Name: "author_id", err: fmt.Errorf(`store: validator failed for field "Message.author_id": %w`, err)}
 		}
 	}
 	if _, ok := mc.mutation.IsVisibleForClient(); !ok {
@@ -296,6 +276,14 @@ func (mc *MessageCreate) check() error {
 	if _, ok := mc.mutation.IsService(); !ok {
 		return &ValidationError{Name: "is_service", err: errors.New(`store: missing required field "Message.is_service"`)}
 	}
+	if _, ok := mc.mutation.InitialRequestID(); !ok {
+		return &ValidationError{Name: "initial_request_id", err: errors.New(`store: missing required field "Message.initial_request_id"`)}
+	}
+	if v, ok := mc.mutation.InitialRequestID(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "initial_request_id", err: fmt.Errorf(`store: validator failed for field "Message.initial_request_id": %w`, err)}
+		}
+	}
 	if _, ok := mc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`store: missing required field "Message.created_at"`)}
 	}
@@ -304,11 +292,11 @@ func (mc *MessageCreate) check() error {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`store: validator failed for field "Message.id": %w`, err)}
 		}
 	}
-	if _, ok := mc.mutation.ProblemID(); !ok {
-		return &ValidationError{Name: "problem", err: errors.New(`store: missing required edge "Message.problem"`)}
-	}
 	if _, ok := mc.mutation.ChatID(); !ok {
 		return &ValidationError{Name: "chat", err: errors.New(`store: missing required edge "Message.chat"`)}
+	}
+	if _, ok := mc.mutation.ProblemID(); !ok {
+		return &ValidationError{Name: "problem", err: errors.New(`store: missing required edge "Message.problem"`)}
 	}
 	return nil
 }
@@ -350,10 +338,6 @@ func (mc *MessageCreate) createSpec() (*Message, *sqlgraph.CreateSpec) {
 		_spec.SetField(message.FieldAuthorID, field.TypeUUID, value)
 		_node.AuthorID = value
 	}
-	if value, ok := mc.mutation.InitialRequestID(); ok {
-		_spec.SetField(message.FieldInitialRequestID, field.TypeUUID, value)
-		_node.InitialRequestID = value
-	}
 	if value, ok := mc.mutation.IsVisibleForClient(); ok {
 		_spec.SetField(message.FieldIsVisibleForClient, field.TypeBool, value)
 		_node.IsVisibleForClient = value
@@ -378,26 +362,13 @@ func (mc *MessageCreate) createSpec() (*Message, *sqlgraph.CreateSpec) {
 		_spec.SetField(message.FieldIsService, field.TypeBool, value)
 		_node.IsService = value
 	}
+	if value, ok := mc.mutation.InitialRequestID(); ok {
+		_spec.SetField(message.FieldInitialRequestID, field.TypeUUID, value)
+		_node.InitialRequestID = value
+	}
 	if value, ok := mc.mutation.CreatedAt(); ok {
 		_spec.SetField(message.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
-	}
-	if nodes := mc.mutation.ProblemIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   message.ProblemTable,
-			Columns: []string{message.ProblemColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeUUID),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.ProblemID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := mc.mutation.ChatIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -416,6 +387,23 @@ func (mc *MessageCreate) createSpec() (*Message, *sqlgraph.CreateSpec) {
 		_node.ChatID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
+	if nodes := mc.mutation.ProblemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   message.ProblemTable,
+			Columns: []string{message.ProblemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.ProblemID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	return _node, _spec
 }
 
@@ -423,7 +411,7 @@ func (mc *MessageCreate) createSpec() (*Message, *sqlgraph.CreateSpec) {
 // of the `INSERT` statement. For example:
 //
 //	client.Message.Create().
-//		SetAuthorID(v).
+//		SetChatID(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -432,7 +420,7 @@ func (mc *MessageCreate) createSpec() (*Message, *sqlgraph.CreateSpec) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.MessageUpsert) {
-//			SetAuthorID(v+v).
+//			SetChatID(v+v).
 //		}).
 //		Exec(ctx)
 func (mc *MessageCreate) OnConflict(opts ...sql.ConflictOption) *MessageUpsertOne {
@@ -467,24 +455,6 @@ type (
 		*sql.UpdateSet
 	}
 )
-
-// SetAuthorID sets the "author_id" field.
-func (u *MessageUpsert) SetAuthorID(v types.UserID) *MessageUpsert {
-	u.Set(message.FieldAuthorID, v)
-	return u
-}
-
-// UpdateAuthorID sets the "author_id" field to the value that was provided on create.
-func (u *MessageUpsert) UpdateAuthorID() *MessageUpsert {
-	u.SetExcluded(message.FieldAuthorID)
-	return u
-}
-
-// ClearAuthorID clears the value of the "author_id" field.
-func (u *MessageUpsert) ClearAuthorID() *MessageUpsert {
-	u.SetNull(message.FieldAuthorID)
-	return u
-}
 
 // SetChatID sets the "chat_id" field.
 func (u *MessageUpsert) SetChatID(v types.ChatID) *MessageUpsert {
@@ -564,18 +534,6 @@ func (u *MessageUpsert) UpdateIsBlocked() *MessageUpsert {
 	return u
 }
 
-// SetIsService sets the "is_service" field.
-func (u *MessageUpsert) SetIsService(v bool) *MessageUpsert {
-	u.Set(message.FieldIsService, v)
-	return u
-}
-
-// UpdateIsService sets the "is_service" field to the value that was provided on create.
-func (u *MessageUpsert) UpdateIsService() *MessageUpsert {
-	u.SetExcluded(message.FieldIsService)
-	return u
-}
-
 // UpdateNewValues updates the mutable fields using the new values that were set on create except the ID field.
 // Using this option is equivalent to using:
 //
@@ -593,11 +551,17 @@ func (u *MessageUpsertOne) UpdateNewValues() *MessageUpsertOne {
 		if _, exists := u.create.mutation.ID(); exists {
 			s.SetIgnore(message.FieldID)
 		}
-		if _, exists := u.create.mutation.InitialRequestID(); exists {
-			s.SetIgnore(message.FieldInitialRequestID)
+		if _, exists := u.create.mutation.AuthorID(); exists {
+			s.SetIgnore(message.FieldAuthorID)
 		}
 		if _, exists := u.create.mutation.Body(); exists {
 			s.SetIgnore(message.FieldBody)
+		}
+		if _, exists := u.create.mutation.IsService(); exists {
+			s.SetIgnore(message.FieldIsService)
+		}
+		if _, exists := u.create.mutation.InitialRequestID(); exists {
+			s.SetIgnore(message.FieldInitialRequestID)
 		}
 		if _, exists := u.create.mutation.CreatedAt(); exists {
 			s.SetIgnore(message.FieldCreatedAt)
@@ -631,27 +595,6 @@ func (u *MessageUpsertOne) Update(set func(*MessageUpsert)) *MessageUpsertOne {
 		set(&MessageUpsert{UpdateSet: update})
 	}))
 	return u
-}
-
-// SetAuthorID sets the "author_id" field.
-func (u *MessageUpsertOne) SetAuthorID(v types.UserID) *MessageUpsertOne {
-	return u.Update(func(s *MessageUpsert) {
-		s.SetAuthorID(v)
-	})
-}
-
-// UpdateAuthorID sets the "author_id" field to the value that was provided on create.
-func (u *MessageUpsertOne) UpdateAuthorID() *MessageUpsertOne {
-	return u.Update(func(s *MessageUpsert) {
-		s.UpdateAuthorID()
-	})
-}
-
-// ClearAuthorID clears the value of the "author_id" field.
-func (u *MessageUpsertOne) ClearAuthorID() *MessageUpsertOne {
-	return u.Update(func(s *MessageUpsert) {
-		s.ClearAuthorID()
-	})
 }
 
 // SetChatID sets the "chat_id" field.
@@ -742,20 +685,6 @@ func (u *MessageUpsertOne) SetIsBlocked(v bool) *MessageUpsertOne {
 func (u *MessageUpsertOne) UpdateIsBlocked() *MessageUpsertOne {
 	return u.Update(func(s *MessageUpsert) {
 		s.UpdateIsBlocked()
-	})
-}
-
-// SetIsService sets the "is_service" field.
-func (u *MessageUpsertOne) SetIsService(v bool) *MessageUpsertOne {
-	return u.Update(func(s *MessageUpsert) {
-		s.SetIsService(v)
-	})
-}
-
-// UpdateIsService sets the "is_service" field to the value that was provided on create.
-func (u *MessageUpsertOne) UpdateIsService() *MessageUpsertOne {
-	return u.Update(func(s *MessageUpsert) {
-		s.UpdateIsService()
 	})
 }
 
@@ -895,7 +824,7 @@ func (mcb *MessageCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.MessageUpsert) {
-//			SetAuthorID(v+v).
+//			SetChatID(v+v).
 //		}).
 //		Exec(ctx)
 func (mcb *MessageCreateBulk) OnConflict(opts ...sql.ConflictOption) *MessageUpsertBulk {
@@ -942,11 +871,17 @@ func (u *MessageUpsertBulk) UpdateNewValues() *MessageUpsertBulk {
 			if _, exists := b.mutation.ID(); exists {
 				s.SetIgnore(message.FieldID)
 			}
-			if _, exists := b.mutation.InitialRequestID(); exists {
-				s.SetIgnore(message.FieldInitialRequestID)
+			if _, exists := b.mutation.AuthorID(); exists {
+				s.SetIgnore(message.FieldAuthorID)
 			}
 			if _, exists := b.mutation.Body(); exists {
 				s.SetIgnore(message.FieldBody)
+			}
+			if _, exists := b.mutation.IsService(); exists {
+				s.SetIgnore(message.FieldIsService)
+			}
+			if _, exists := b.mutation.InitialRequestID(); exists {
+				s.SetIgnore(message.FieldInitialRequestID)
 			}
 			if _, exists := b.mutation.CreatedAt(); exists {
 				s.SetIgnore(message.FieldCreatedAt)
@@ -981,27 +916,6 @@ func (u *MessageUpsertBulk) Update(set func(*MessageUpsert)) *MessageUpsertBulk 
 		set(&MessageUpsert{UpdateSet: update})
 	}))
 	return u
-}
-
-// SetAuthorID sets the "author_id" field.
-func (u *MessageUpsertBulk) SetAuthorID(v types.UserID) *MessageUpsertBulk {
-	return u.Update(func(s *MessageUpsert) {
-		s.SetAuthorID(v)
-	})
-}
-
-// UpdateAuthorID sets the "author_id" field to the value that was provided on create.
-func (u *MessageUpsertBulk) UpdateAuthorID() *MessageUpsertBulk {
-	return u.Update(func(s *MessageUpsert) {
-		s.UpdateAuthorID()
-	})
-}
-
-// ClearAuthorID clears the value of the "author_id" field.
-func (u *MessageUpsertBulk) ClearAuthorID() *MessageUpsertBulk {
-	return u.Update(func(s *MessageUpsert) {
-		s.ClearAuthorID()
-	})
 }
 
 // SetChatID sets the "chat_id" field.
@@ -1092,20 +1006,6 @@ func (u *MessageUpsertBulk) SetIsBlocked(v bool) *MessageUpsertBulk {
 func (u *MessageUpsertBulk) UpdateIsBlocked() *MessageUpsertBulk {
 	return u.Update(func(s *MessageUpsert) {
 		s.UpdateIsBlocked()
-	})
-}
-
-// SetIsService sets the "is_service" field.
-func (u *MessageUpsertBulk) SetIsService(v bool) *MessageUpsertBulk {
-	return u.Update(func(s *MessageUpsert) {
-		s.SetIsService(v)
-	})
-}
-
-// UpdateIsService sets the "is_service" field to the value that was provided on create.
-func (u *MessageUpsertBulk) UpdateIsService() *MessageUpsertBulk {
-	return u.Update(func(s *MessageUpsert) {
-		s.UpdateIsService()
 	})
 }
 

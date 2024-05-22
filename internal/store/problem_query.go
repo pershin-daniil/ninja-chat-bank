@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 
-	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -26,9 +25,8 @@ type ProblemQuery struct {
 	order        []problem.OrderOption
 	inters       []Interceptor
 	predicates   []predicate.Problem
-	withMessages *MessageQuery
 	withChat     *ChatQuery
-	modifiers    []func(*sql.Selector)
+	withMessages *MessageQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -65,28 +63,6 @@ func (pq *ProblemQuery) Order(o ...problem.OrderOption) *ProblemQuery {
 	return pq
 }
 
-// QueryMessages chains the current query on the "messages" edge.
-func (pq *ProblemQuery) QueryMessages() *MessageQuery {
-	query := (&MessageClient{config: pq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := pq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := pq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(problem.Table, problem.FieldID, selector),
-			sqlgraph.To(message.Table, message.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, problem.MessagesTable, problem.MessagesColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(pq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
 // QueryChat chains the current query on the "chat" edge.
 func (pq *ProblemQuery) QueryChat() *ChatQuery {
 	query := (&ChatClient{config: pq.config}).Query()
@@ -102,6 +78,28 @@ func (pq *ProblemQuery) QueryChat() *ChatQuery {
 			sqlgraph.From(problem.Table, problem.FieldID, selector),
 			sqlgraph.To(chat.Table, chat.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, problem.ChatTable, problem.ChatColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(pq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryMessages chains the current query on the "messages" edge.
+func (pq *ProblemQuery) QueryMessages() *MessageQuery {
+	query := (&MessageClient{config: pq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := pq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := pq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(problem.Table, problem.FieldID, selector),
+			sqlgraph.To(message.Table, message.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, problem.MessagesTable, problem.MessagesColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(pq.driver.Dialect(), step)
 		return fromU, nil
@@ -301,23 +299,12 @@ func (pq *ProblemQuery) Clone() *ProblemQuery {
 		order:        append([]problem.OrderOption{}, pq.order...),
 		inters:       append([]Interceptor{}, pq.inters...),
 		predicates:   append([]predicate.Problem{}, pq.predicates...),
-		withMessages: pq.withMessages.Clone(),
 		withChat:     pq.withChat.Clone(),
+		withMessages: pq.withMessages.Clone(),
 		// clone intermediate query.
 		sql:  pq.sql.Clone(),
 		path: pq.path,
 	}
-}
-
-// WithMessages tells the query-builder to eager-load the nodes that are connected to
-// the "messages" edge. The optional arguments are used to configure the query builder of the edge.
-func (pq *ProblemQuery) WithMessages(opts ...func(*MessageQuery)) *ProblemQuery {
-	query := (&MessageClient{config: pq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	pq.withMessages = query
-	return pq
 }
 
 // WithChat tells the query-builder to eager-load the nodes that are connected to
@@ -328,6 +315,17 @@ func (pq *ProblemQuery) WithChat(opts ...func(*ChatQuery)) *ProblemQuery {
 		opt(query)
 	}
 	pq.withChat = query
+	return pq
+}
+
+// WithMessages tells the query-builder to eager-load the nodes that are connected to
+// the "messages" edge. The optional arguments are used to configure the query builder of the edge.
+func (pq *ProblemQuery) WithMessages(opts ...func(*MessageQuery)) *ProblemQuery {
+	query := (&MessageClient{config: pq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	pq.withMessages = query
 	return pq
 }
 
@@ -410,8 +408,8 @@ func (pq *ProblemQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Prob
 		nodes       = []*Problem{}
 		_spec       = pq.querySpec()
 		loadedTypes = [2]bool{
-			pq.withMessages != nil,
 			pq.withChat != nil,
+			pq.withMessages != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -423,9 +421,6 @@ func (pq *ProblemQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Prob
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
-	if len(pq.modifiers) > 0 {
-		_spec.Modifiers = pq.modifiers
-	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
@@ -435,6 +430,12 @@ func (pq *ProblemQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Prob
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := pq.withChat; query != nil {
+		if err := pq.loadChat(ctx, query, nodes, nil,
+			func(n *Problem, e *Chat) { n.Edges.Chat = e }); err != nil {
+			return nil, err
+		}
+	}
 	if query := pq.withMessages; query != nil {
 		if err := pq.loadMessages(ctx, query, nodes,
 			func(n *Problem) { n.Edges.Messages = []*Message{} },
@@ -442,15 +443,38 @@ func (pq *ProblemQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Prob
 			return nil, err
 		}
 	}
-	if query := pq.withChat; query != nil {
-		if err := pq.loadChat(ctx, query, nodes, nil,
-			func(n *Problem, e *Chat) { n.Edges.Chat = e }); err != nil {
-			return nil, err
-		}
-	}
 	return nodes, nil
 }
 
+func (pq *ProblemQuery) loadChat(ctx context.Context, query *ChatQuery, nodes []*Problem, init func(*Problem), assign func(*Problem, *Chat)) error {
+	ids := make([]types.ChatID, 0, len(nodes))
+	nodeids := make(map[types.ChatID][]*Problem)
+	for i := range nodes {
+		fk := nodes[i].ChatID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(chat.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "chat_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 func (pq *ProblemQuery) loadMessages(ctx context.Context, query *MessageQuery, nodes []*Problem, init func(*Problem), assign func(*Problem, *Message)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[types.ProblemID]*Problem)
@@ -481,41 +505,9 @@ func (pq *ProblemQuery) loadMessages(ctx context.Context, query *MessageQuery, n
 	}
 	return nil
 }
-func (pq *ProblemQuery) loadChat(ctx context.Context, query *ChatQuery, nodes []*Problem, init func(*Problem), assign func(*Problem, *Chat)) error {
-	ids := make([]types.ChatID, 0, len(nodes))
-	nodeids := make(map[types.ChatID][]*Problem)
-	for i := range nodes {
-		fk := nodes[i].ChatID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(chat.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "chat_id" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
 
 func (pq *ProblemQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := pq.querySpec()
-	if len(pq.modifiers) > 0 {
-		_spec.Modifiers = pq.modifiers
-	}
 	_spec.Node.Columns = pq.ctx.Fields
 	if len(pq.ctx.Fields) > 0 {
 		_spec.Unique = pq.ctx.Unique != nil && *pq.ctx.Unique
@@ -581,9 +573,6 @@ func (pq *ProblemQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	if pq.ctx.Unique != nil && *pq.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, m := range pq.modifiers {
-		m(selector)
-	}
 	for _, p := range pq.predicates {
 		p(selector)
 	}
@@ -599,32 +588,6 @@ func (pq *ProblemQuery) sqlQuery(ctx context.Context) *sql.Selector {
 		selector.Limit(*limit)
 	}
 	return selector
-}
-
-// ForUpdate locks the selected rows against concurrent updates, and prevent them from being
-// updated, deleted or "selected ... for update" by other sessions, until the transaction is
-// either committed or rolled-back.
-func (pq *ProblemQuery) ForUpdate(opts ...sql.LockOption) *ProblemQuery {
-	if pq.driver.Dialect() == dialect.Postgres {
-		pq.Unique(false)
-	}
-	pq.modifiers = append(pq.modifiers, func(s *sql.Selector) {
-		s.ForUpdate(opts...)
-	})
-	return pq
-}
-
-// ForShare behaves similarly to ForUpdate, except that it acquires a shared mode lock
-// on any rows that are read. Other sessions can read the rows, but cannot modify them
-// until your transaction commits.
-func (pq *ProblemQuery) ForShare(opts ...sql.LockOption) *ProblemQuery {
-	if pq.driver.Dialect() == dialect.Postgres {
-		pq.Unique(false)
-	}
-	pq.modifiers = append(pq.modifiers, func(s *sql.Selector) {
-		s.ForShare(opts...)
-	})
-	return pq
 }
 
 // ProblemGroupBy is the group-by builder for Problem entities.

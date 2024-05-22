@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"entgo.io/ent/dialect/sql"
-
+	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/chat"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/message"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
@@ -28,12 +27,20 @@ type Cursor struct {
 	PageSize      int
 }
 
-func (c Cursor) isValid() bool {
-	if !isValidPageSize(c.PageSize) || c.LastCreatedAt.IsZero() {
-		return false
+func (c Cursor) Validate() error {
+	if c.LastCreatedAt.IsZero() {
+		return errors.New("LastCreatedAt field must be specified")
 	}
 
-	return true
+	return validatePageSize(c.PageSize)
+}
+
+func validatePageSize(ps int) error {
+	if ps < minPageSize || ps > maxPageSize {
+		return fmt.Errorf("PageSize field must be in [%d, %d]", minPageSize, maxPageSize)
+	}
+
+	return nil
 }
 
 // GetClientChatMessages returns Nth page of messages in the chat for client side.
@@ -43,53 +50,53 @@ func (r *Repo) GetClientChatMessages(
 	pageSize int,
 	cursor *Cursor,
 ) ([]Message, *Cursor, error) {
-	query := r.db.Chat(ctx).Query().
-		Where(chat.ClientIDEQ(clientID)).QueryMessages().
-		Where(message.IsVisibleForClient(true))
+	query := r.db.Message(ctx).Query().
+		Unique(false).
+		Where(message.IsVisibleForClient(true)).
+		Where(message.HasChatWith(chat.ClientID(clientID)))
 
-	if cursor != nil {
-		if !cursor.isValid() {
-			return nil, nil, ErrInvalidCursor
-		}
-
-		query = query.Where(message.CreatedAtLT(cursor.LastCreatedAt))
-		pageSize = cursor.PageSize
-	}
-
-	if !isValidPageSize(pageSize) {
-		return nil, nil, ErrInvalidPageSize
-	}
-
-	messagesFromStore, err := query.Limit(pageSize + 1).Order(message.ByCreatedAt(sql.OrderDesc())).All(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute the query: %v", err)
-	}
-
-	messagesCount := len(messagesFromStore)
-	if messagesCount > pageSize {
-		messagesCount = pageSize
-	}
-
-	messages := make([]Message, messagesCount)
-
-	for i := 0; i < messagesCount; i++ {
-		messages[i] = adaptStoreMessage(messagesFromStore[i])
-	}
-
-	cursor = nil
-	if len(messagesFromStore) > len(messages) {
-		cursor = &Cursor{
-			LastCreatedAt: messages[messagesCount-1].CreatedAt,
-			PageSize:      pageSize,
-		}
-	}
-
-	return messages, cursor, nil
+	return r.getChatMessages(ctx, query, pageSize, cursor)
 }
 
-func isValidPageSize(p int) bool {
-	if p >= minPageSize && p <= maxPageSize {
-		return true
+func (r *Repo) getChatMessages(
+	ctx context.Context,
+	query *store.MessageQuery,
+	pageSize int,
+	cursor *Cursor,
+) ([]Message, *Cursor, error) {
+	lastCreatedAt := time.Now().AddDate(100, 0, 0)
+	if cursor != nil {
+		if err := cursor.Validate(); err != nil {
+			return nil, nil, fmt.Errorf("%w: %v", ErrInvalidCursor, err)
+		}
+		pageSize, lastCreatedAt = cursor.PageSize, cursor.LastCreatedAt
+	} else {
+		if err := validatePageSize(pageSize); err != nil {
+			return nil, nil, fmt.Errorf("%w: %v", ErrInvalidPageSize, err)
+		}
 	}
-	return false
+
+	msgs, err := query.
+		Where(message.CreatedAtLT(lastCreatedAt)).
+		Order(store.Desc(message.FieldCreatedAt)).
+		Limit(pageSize + 1).
+		All(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("select messages: %v", err)
+	}
+
+	result := make([]Message, 0, len(msgs))
+	for _, m := range msgs {
+		result = append(result, adaptStoreMessage(m))
+	}
+
+	if len(result) <= pageSize {
+		return result, nil, nil
+	}
+
+	result = result[:len(result)-1]
+	return result, &Cursor{
+		LastCreatedAt: result[len(result)-1].CreatedAt,
+		PageSize:      pageSize,
+	}, nil
 }

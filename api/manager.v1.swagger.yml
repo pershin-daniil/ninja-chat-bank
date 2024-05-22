@@ -1,0 +1,90 @@
+openapi: 3.0.3
+info:
+  title: Bank Support Chat Manager API
+  version: v1
+
+servers:
+  - url: http://localhost:8081/v1
+    description: Development server
+
+paths:
+  /getFreeHandsBtnAvailability:
+    post:
+      description: check if free hands button is available
+      parameters:
+        - $ref: "#/components/parameters/XRequestIDHeader"
+      responses:
+        200:
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetFreeHandsBtnAvailabilityResponse"
+
+  /freeHands:
+    post:
+      description: make manager status is ready for work
+      parameters:
+        - $ref: "#/components/parameters/XRequestIDHeader"
+      responses:
+        200:
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreeHandsResponse"
+
+security:
+  - bearerAuth: [ ]
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    XRequestIDHeader:
+      in: header
+      name: X-Request-ID
+      schema:
+        type: string
+        format: uuid
+        x-go-type: types.RequestID
+        x-go-import:
+          path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+      required: true
+
+  schemas:
+    GetFreeHandsBtnAvailabilityResponse:
+      required: [ "data" ]
+      properties:
+        data:
+          additionalProperties: true
+        error:
+          $ref: "#/components/schemas/Error"
+
+    FreeHandsResponse:
+      properties:
+        data:
+          type: object
+        error:
+          $ref: "#/components/schemas/Error"
+
+    # Common.
+
+    Error:
+      required: [ message, code ]
+      properties:
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+        message:
+          type: string
+        details:
+          type: string
+
+    ErrorCode:
+      type: integer
+      description: contains HTTP error codes and specific business logic error codes (the last must be >= 1000).
+      minimum: 400

@@ -25,38 +25,34 @@ func NewDatabase(client *Client) *Database {
 // If there is already a transaction in the context, then the method uses it.
 func (db *Database) RunInTx(ctx context.Context, f func(context.Context) error) (err error) {
 	tx := TxFromContext(ctx)
-	if nil == tx {
-		tx, err = db.loadClient(ctx).BeginTx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("failed to begin tx: %v", err)
-		}
+	if tx != nil {
+		return f(ctx)
+	}
 
-		ctx = NewTxContext(ctx, tx)
+	tx, err = db.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+
+	loggedRollback := func() {
+		if rErr := tx.Rollback(); rErr != nil {
+			zap.L().Named("store").Error("rollback tx", zap.Error(rErr))
+		}
 	}
 
 	defer func() {
 		if r := recover(); r != nil {
-			if errR := tx.Rollback(); errR != nil {
-				zap.L().Warn("failed to rollback: %v", zap.Error(errR))
-			}
-
+			loggedRollback()
 			panic(r)
 		}
-	}()
 
-	if err = f(ctx); err != nil {
-		if errR := tx.Rollback(); errR != nil {
-			zap.L().Warn("failed to rollback: %v", zap.Error(errR))
+		if err != nil {
+			loggedRollback()
+		} else if err = tx.Commit(); err != nil {
+			err = fmt.Errorf("commit tx: %w", err)
 		}
-
-		return err
-	}
-
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit tx: %v", err)
-	}
-
-	return nil
+	}()
+	return f(NewTxContext(ctx, tx))
 }
 
 func (db *Database) loadClient(ctx context.Context) *Client {
@@ -90,6 +86,16 @@ func (db *Database) Query(ctx context.Context, query string, args ...any) (*sql.
 // Chat is the client for interacting with the Chat builders.
 func (db *Database) Chat(ctx context.Context) *ChatClient {
 	return db.loadClient(ctx).Chat
+}
+
+// FailedJob is the client for interacting with the FailedJob builders.
+func (db *Database) FailedJob(ctx context.Context) *FailedJobClient {
+	return db.loadClient(ctx).FailedJob
+}
+
+// Job is the client for interacting with the Job builders.
+func (db *Database) Job(ctx context.Context) *JobClient {
+	return db.loadClient(ctx).Job
 }
 
 // Message is the client for interacting with the Message builders.

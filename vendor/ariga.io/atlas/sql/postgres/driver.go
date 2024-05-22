@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"math/rand"
 	"net/url"
 	"strconv"
 	"time"
@@ -237,7 +238,20 @@ func (d *Driver) SchemaRestoreFunc(desired *schema.Schema) migrate.RestoreFunc {
 
 // RealmRestoreFunc returns a function that restores the given realm to its desired state.
 func (d *Driver) RealmRestoreFunc(desired *schema.Realm) migrate.RestoreFunc {
-	return func(ctx context.Context) error {
+	return func(ctx context.Context) (err error) {
+		// Default behavior for Postgres is to have a single "public" schema.
+		// In that case, all other schemas are dropped, but this one is cleared
+		// object by object. To keep process faster, we drop the schema and recreate it.
+		if !d.crdb && len(desired.Schemas) == 1 && desired.Schemas[0].Name == "public" {
+			if pb := desired.Schemas[0]; len(pb.Tables)+len(pb.Views)+len(pb.Funcs)+len(pb.Procs)+len(pb.Objects) == 0 {
+				desired = &schema.Realm{Attrs: desired.Attrs, Objects: desired.Objects}
+				defer func() {
+					err = errors.Join(err, d.ApplyChanges(ctx, []schema.Change{
+						&schema.AddSchema{S: pb, Extra: []schema.Clause{&schema.IfExists{}}},
+					}))
+				}()
+			}
+		}
 		current, err := d.InspectRealm(ctx, nil)
 		if err != nil {
 			return err
@@ -316,6 +330,16 @@ func (*Driver) ParseType(s string) (schema.Type, error) {
 	return ParseType(s)
 }
 
+// StmtBuilder is a helper method used to build statements with PostgreSQL formatting.
+func (*Driver) StmtBuilder(opts migrate.PlanOptions) *sqlx.Builder {
+	return &sqlx.Builder{
+		QuoteOpening: '"',
+		QuoteClosing: '"',
+		Schema:       opts.SchemaQualifier,
+		Indent:       opts.Indent,
+	}
+}
+
 // ScanStmts implements migrate.StmtScanner.
 func (*Driver) ScanStmts(input string) ([]*migrate.Stmt, error) {
 	return (&migrate.Scanner{
@@ -327,38 +351,38 @@ func (*Driver) ScanStmts(input string) ([]*migrate.Stmt, error) {
 	}).Scan(input)
 }
 
+// Use pg_try_advisory_lock to avoid deadlocks between multiple executions of Atlas (commonly tests).
+// The common case is as follows: a process (P1) of Atlas takes a lock, and another process (P2) of
+// Atlas waits for the lock. Now if P1 execute "CREATE INDEX CONCURRENTLY" (either in apply or diff),
+// the command waits all active transactions that can potentially changed the index to be finished.
+// P2 can be executed in a transaction block (opened explicitly by Atlas), or a single statement tx
+// also known as "autocommit mode". Read more: https://www.postgresql.org/docs/current/sql-begin.html.
 func acquire(ctx context.Context, conn schema.ExecQuerier, id uint32, timeout time.Duration) error {
-	switch {
-	// With timeout (context-based).
-	case timeout > 0:
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-		fallthrough
-	// Infinite timeout.
-	case timeout < 0:
-		rows, err := conn.QueryContext(ctx, "SELECT pg_advisory_lock($1)", id)
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			err = schema.ErrLocked
-		}
-		if err != nil {
-			return err
-		}
-		return rows.Close()
-	// No timeout.
-	default:
+	var (
+		inter = 25
+		start = time.Now()
+	)
+	for {
 		rows, err := conn.QueryContext(ctx, "SELECT pg_try_advisory_lock($1)", id)
 		if err != nil {
 			return err
 		}
-		acquired, err := sqlx.ScanNullBool(rows)
-		if err != nil {
+		switch acquired, err := sqlx.ScanNullBool(rows); {
+		case err != nil:
 			return err
-		}
-		if !acquired.Bool {
+		case acquired.Bool:
+			return nil
+		case time.Since(start) > timeout:
 			return schema.ErrLocked
+		default:
+			if err := rows.Close(); err != nil {
+				return err
+			}
+			// 25ms~50ms, 50ms~100ms, ..., 800ms~1.6s, 1s~2s.
+			d := min(time.Duration(inter)*time.Millisecond, time.Second)
+			time.Sleep(d + time.Duration(rand.Intn(int(d))))
+			inter += inter
 		}
-		return nil
 	}
 }
 
@@ -402,7 +426,8 @@ const (
 	TypeCharVar   = "character varying"
 	TypeVarChar   = "varchar" // character varying
 	TypeText      = "text"
-	typeName      = "name" // internal type for object names
+	TypeBPChar    = "bpchar" // blank-padded character.
+	typeName      = "name"   // internal type for object names
 
 	TypeSmallInt = "smallint"
 	TypeInteger  = "integer"
@@ -490,16 +515,17 @@ const (
 	typeRegType       = "regtype"
 
 	// PostgreSQL of supported pseudo-types.
-	typeAny         = "any"
-	typeAnyElement  = "anyelement"
-	typeAnyArray    = "anyarray"
-	typeAnyNonArray = "anynonarray"
-	typeAnyEnum     = "anyenum"
-	typeInternal    = "internal"
-	typeRecord      = "record"
-	typeTrigger     = "trigger"
-	typeVoid        = "void"
-	typeUnknown     = "unknown"
+	typeAny          = "any"
+	typeAnyElement   = "anyelement"
+	typeAnyArray     = "anyarray"
+	typeAnyNonArray  = "anynonarray"
+	typeAnyEnum      = "anyenum"
+	typeInternal     = "internal"
+	typeRecord       = "record"
+	typeTrigger      = "trigger"
+	typeEventTrigger = "event_trigger"
+	typeVoid         = "void"
+	typeUnknown      = "unknown"
 )
 
 // List of supported index types.
