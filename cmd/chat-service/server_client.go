@@ -13,11 +13,14 @@ import (
 	problemsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/problems"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server-client/errhandler"
+	clientevents "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/events"
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
+	inmemeventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream/in-mem"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
 	gethistory "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/client/get-history"
 	sendmessage "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/client/send-message"
+	websocketstream "github.com/pershin-daniil/ninja-chat-bank/internal/websocket-stream"
 )
 
 const nameServerClient = "server-client"
@@ -26,6 +29,8 @@ func initServerClient( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/f
 	isProduction bool,
 	addr string,
 	allowOrigins []string,
+	secWsProtocol string,
+	eventStream *inmemeventstream.Service,
 	v1Swagger *openapi3.T,
 
 	client *keycloakclient.Client,
@@ -62,6 +67,25 @@ func initServerClient( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/f
 		return nil, fmt.Errorf("failed to create errorHandler: %v", err)
 	}
 
+	wsClientShutdown := make(chan struct{})
+	wsClientUpgrader := websocketstream.NewUpgrader(
+		allowOrigins,
+		secWsProtocol,
+	)
+
+	wsClientHandler, err := websocketstream.NewHTTPHandler(
+		websocketstream.NewOptions(
+			zap.L(),
+			eventStream,
+			clientevents.Adapter{},
+			websocketstream.JSONEventWriter{},
+			wsClientUpgrader,
+			wsClientShutdown,
+		))
+	if err != nil {
+		return nil, fmt.Errorf("failed to init websocket client handler: %v", err)
+	}
+
 	srv, err := server.New(server.NewOptions(
 		lg,
 		addr,
@@ -73,6 +97,8 @@ func initServerClient( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/f
 		client,
 		resource,
 		role,
+		secWsProtocol,
+		wsClientHandler,
 		errHandler.Handle,
 	))
 	if err != nil {

@@ -33,6 +33,31 @@ func (t ChatID) Validate() error {
 	return nil
 }
 
+var EventIDNil = EventID(uuid.Nil)
+
+type EventID uuid.UUID
+
+func NewEventID() EventID                          { return EventID(uuid.New()) }
+func (t EventID) String() string                   { return uuid.UUID(t).String() }
+func (t EventID) Value() (driver.Value, error)     { return t.String(), nil }
+func (t *EventID) Scan(src any) error              { return (*uuid.UUID)(t).Scan(src) }
+func (t EventID) MarshalText() ([]byte, error)     { return uuid.UUID(t).MarshalText() }
+func (t *EventID) UnmarshalText(data []byte) error { return (*uuid.UUID)(t).UnmarshalText(data) }
+func (t EventID) IsZero() bool                     { return t == EventIDNil }
+func (t EventID) Matches(x any) bool {
+	v, ok := x.(EventID)
+	if !ok {
+		return false
+	}
+	return t.String() == v.String()
+}
+func (t EventID) Validate() error {
+	if t.IsZero() {
+		return errors.New("zero EventID")
+	}
+	return nil
+}
+
 var FailedJobIDNil = FailedJobID(uuid.Nil)
 
 type FailedJobID uuid.UUID
@@ -184,7 +209,7 @@ func (t UserID) Validate() error {
 }
 
 type TypeSet = interface {
-	ChatID | FailedJobID | JobID | MessageID | ProblemID | RequestID | UserID
+	ChatID | EventID | FailedJobID | JobID | MessageID | ProblemID | RequestID | UserID
 }
 
 func Parse[T TypeSet](s string) (T, error) {

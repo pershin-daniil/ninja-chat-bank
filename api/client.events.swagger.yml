@@ -1,0 +1,101 @@
+openapi: 3.1.0
+info:
+  title: Bank Support Chat Client Events
+  version: v1
+
+servers:
+  - url: ws://localhost:8080/ws
+    description: Development server
+
+paths:
+  /stub:
+    get:
+      description: It uses for generating events. Otherwise it doesn't.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+
+components:
+ schemas:
+    Event:
+      oneOf:
+        - $ref: "#/components/schemas/MessageSentEvent"
+        - $ref: "#/components/schemas/NewMessageEvent"
+      discriminator:
+        propertyName: eventType
+
+    NewMessageEvent:
+      required: [ eventId, messageId, requestId, eventType, body ]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/EventID"
+        messageId:
+          $ref: "#/components/schemas/MessageID"
+        requestId:
+          $ref: "#/components/schemas/RequestID"
+        eventType:
+          $ref: "#/components/schemas/EventType"
+        authorId:
+          $ref: "#/components/schemas/AuthorID"
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        isService:
+          type: boolean
+
+    MessageSentEvent:
+      required: [ eventId, messageId, requestId, eventType ]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/EventID"
+        messageId:
+          $ref: "#/components/schemas/MessageID"
+        requestId:
+          $ref: "#/components/schemas/RequestID"
+        eventType:
+          $ref: "#/components/schemas/EventType"
+
+    EventType:
+      type: string
+      enum:
+        - NewMessageEvent
+        - MessageSentEvent
+        - MessageBlockedEvent
+
+    EventID:
+      type: string
+      format: uuid
+      x-go-type: types.EventID
+      x-go-name: ID
+      x-go-type-import:
+        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+
+    AuthorID:
+      type: string
+      format: uuid
+      x-go-type: types.UserID
+      x-go-name: AuthorID
+      x-go-type-import:
+        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+
+    RequestID:
+      type: string
+      format: uuid
+      x-go-type: types.RequestID
+      x-go-name: RequestID
+      x-go-type-import:
+        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+
+    MessageID:
+      type: string
+      format: uuid
+      x-go-type: types.MessageID
+      x-go-name: MessageID
+      x-go-type-import:
+        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"

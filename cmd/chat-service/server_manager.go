@@ -10,11 +10,14 @@ import (
 	keycloakclient "github.com/pershin-daniil/ninja-chat-bank/internal/clients/keycloak"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server-client/errhandler"
+	clientevents "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/events"
 	managerv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/v1"
+	inmemeventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream/in-mem"
 	managerload "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-load"
 	managerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool"
 	canreceiveproblems "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/can-receive-problems"
 	freehands "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands"
+	websocketstream "github.com/pershin-daniil/ninja-chat-bank/internal/websocket-stream"
 )
 
 const nameServerManager = "server-manager"
@@ -23,6 +26,8 @@ func initServerManager( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/
 	isProduction bool,
 	addr string,
 	allowOrigins []string,
+	secWsProtocol string,
+	eventStream *inmemeventstream.Service,
 	v1Swagger *openapi3.T,
 
 	client *keycloakclient.Client,
@@ -60,6 +65,24 @@ func initServerManager( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/
 		return nil, fmt.Errorf("failed to create errorHandler: %v", err)
 	}
 
+	wsManagerShutdown := make(chan struct{})
+	wsManagerUpgrader := websocketstream.NewUpgrader(
+		allowOrigins,
+		secWsProtocol,
+	)
+	wsManagerHandler, err := websocketstream.NewHTTPHandler(
+		websocketstream.NewOptions(
+			zap.L(),
+			eventStream,
+			clientevents.Adapter{},
+			websocketstream.JSONEventWriter{},
+			wsManagerUpgrader,
+			wsManagerShutdown,
+		))
+	if err != nil {
+		return nil, fmt.Errorf("failed to init websocket client handler: %v", err)
+	}
+
 	srv, err := server.New(server.NewOptions(
 		lg,
 		addr,
@@ -71,6 +94,8 @@ func initServerManager( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/
 		client,
 		resource,
 		role,
+		secWsProtocol,
+		wsManagerHandler,
 		errHandler.Handle,
 	))
 	if err != nil {

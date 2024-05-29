@@ -37,6 +37,7 @@ vars:
 
   TYPES: |
     ChatID
+    EventID
     FailedJobID
     JobID
     MessageID
@@ -57,6 +58,10 @@ vars:
   CLIENT_V1_PKG: clientv1
   CLIENT_V1_SRC: ./api/client.v1.swagger.yml
   CLIENT_V1_DST: ./internal/server-client/v1/server.gen.go
+
+  CLIENT_EVENTS_PKG: clientevents
+  CLIENT_EVENTS_SRC: ./api/client.events.swagger.yml
+  CLIENT_EVENTS_DST: ./internal/server-client/events/events.gen.go
 
   MANAGER_V1_PKG: managerv1
   MANAGER_V1_SRC: ./api/manager.v1.swagger.yml
@@ -197,6 +202,7 @@ tasks:
   gen:api:
     cmds:
       - task: gen:client
+      - task: gen:events
       - task: gen:manager
       - task: tidy
 
@@ -206,6 +212,14 @@ tasks:
     cmds:
       - echo "Generate client server..."
       - ./oapi-codegen -old-config-style -generate skip-prune,types,server,spec -package {{.CLIENT_V1_PKG }} ../../{{.CLIENT_V1_SRC}} > ../../{{.CLIENT_V1_DST}}
+
+  gen:events:
+    internal: true
+    dir: "{{.TOOLS_DIR}}"
+    cmds:
+      - echo "Generate client events..."
+      - ./oapi-codegen --old-config-style -generate skip-prune,types,spec -package {{.CLIENT_EVENTS_PKG}} ../../{{.CLIENT_EVENTS_SRC}} > ../../{{.CLIENT_EVENTS_DST}}
+
 
   gen:manager:
     internal: true

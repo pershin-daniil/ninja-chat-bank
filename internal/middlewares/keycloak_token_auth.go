@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
@@ -17,7 +18,10 @@ import (
 
 const tokenCtxKey = "user-token"
 
-var ErrNoRequiredResourceRole = errors.New("no required resource role")
+var (
+	ErrTokenNotActive         = errors.New("token not active")
+	ErrNoRequiredResourceRole = errors.New("no required resource role")
+)
 
 type Introspector interface {
 	IntrospectToken(ctx context.Context, token string) (*keycloakclient.IntrospectTokenResult, error)
@@ -25,11 +29,12 @@ type Introspector interface {
 
 // NewKeycloakTokenAuth returns a middleware that implements "active" authentication:
 // each request is verified by the Keycloak server.
-func NewKeycloakTokenAuth(introspector Introspector, resource, role string) echo.MiddlewareFunc {
+func NewKeycloakTokenAuth(introspector Introspector, resource, role, protocol string) echo.MiddlewareFunc {
 	return middleware.KeyAuthWithConfig(middleware.KeyAuthConfig{
-		KeyLookup:  "header:" + echo.HeaderAuthorization,
+		KeyLookup:  "header:" + echo.HeaderAuthorization + "," + "header:Sec-WebSocket-Protocol",
 		AuthScheme: "Bearer",
 		Validator: func(tokenStr string, eCtx echo.Context) (bool, error) {
+			tokenStr = strings.TrimPrefix(tokenStr, protocol+", ")
 			token, err := introspector.IntrospectToken(eCtx.Request().Context(), tokenStr)
 			if err != nil {
 				return false, fmt.Errorf("failed to introspect token: %w", err)

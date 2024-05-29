@@ -21,9 +21,11 @@ import (
 )
 
 const (
-	requiredResource = "chat-ui-client"
-	requiredRole     = "support-chat-client"
-	bearerPrefix     = "Bearer "
+	requiredResource    = "chat-ui-client"
+	requiredRole        = "support-chat-client"
+	bearerPrefix        = "Bearer "
+	protocol            = "chat-service-protocol"
+	headerSecWsProtocol = "Sec-WebSocket-Protocol"
 )
 
 func TestNewKeycloakTokenAuth(t *testing.T) {
@@ -44,7 +46,7 @@ func (s *KeycloakTokenAuthSuite) SetupTest() {
 	s.ctrl = gomock.NewController(s.T())
 
 	s.introspector = middlewaresmocks.NewMockIntrospector(s.ctrl)
-	s.authMdlwr = middlewares.NewKeycloakTokenAuth(s.introspector, requiredResource, requiredRole)
+	s.authMdlwr = middlewares.NewKeycloakTokenAuth(s.introspector, requiredResource, requiredRole, protocol)
 
 	s.req = httptest.NewRequest(http.MethodPost, "/getHistory",
 		bytes.NewBufferString(`{"pageSize": 100, "cursor": ""}`))
@@ -77,6 +79,23 @@ func (s *KeycloakTokenAuthSuite) TestValidToken_AudString() {
 func (s *KeycloakTokenAuthSuite) TestValidToken_AudList() {
 	const token = "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJIR1lJcHN1UXlsZFNJZTB1T0JaeEpuQjBkZlFuTWI5LUlFcmx6NHk5ek9BIn0.eyJleHAiOjI2NjcxOTk1ODAsImlhdCI6MTY2NzE5OTI4MCwiYXV0aF90aW1lIjoxNjY3MTk4OTI4LCJqdGkiOiI5NGQ3ZDBkNS0zZTZmLTQ5NGItYTkzYy1hYjliMDkxMzQ3YmEiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwMTAvcmVhbG1zL0JhbmsiLCJhdWQiOlsiY2hhdC11aS1jbGllbnQiLCJhY2NvdW50Il0sInN1YiI6IjVjYjQwZGMwLWEyNDktNDc4My1hMzAxLTllMWYzY2YzZWE0MSIsInR5cCI6IkJlYXJlciIsImF6cCI6ImNoYXQtdWktY2xpZW50Iiwibm9uY2UiOiJiYTM3ZmQ1YS04YzM5LTQ4MTQtYWZjYi05NTJhMThiNzI2N2QiLCJzZXNzaW9uX3N0YXRlIjoiZDg2ZDE5OGUtYzFjNS00ZWRkLTgzNTAtMzYxZWU1ODE3MWYyIiwiYWNyIjoiMCIsImFsbG93ZWQtb3JpZ2lucyI6WyIiLCIqIl0sInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJvZmZsaW5lX2FjY2VzcyIsImRlZmF1bHQtcm9sZXMtYmFuayIsInVtYV9hdXRob3JpemF0aW9uIl19LCJyZXNvdXJjZV9hY2Nlc3MiOnsiY2hhdC11aS1jbGllbnQiOnsicm9sZXMiOlsic3VwcG9ydC1jaGF0LWNsaWVudCJdfSwiYWNjb3VudCI6eyJyb2xlcyI6WyJtYW5hZ2UtYWNjb3VudCIsIm1hbmFnZS1hY2NvdW50LWxpbmtzIiwidmlldy1wcm9maWxlIl19fSwic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSBlbWFpbCIsInNpZCI6ImQ4NmQxOThlLWMxYzUtNGVkZC04MzUwLTM2MWVlNTgxNzFmMiIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJib25kMDA3IiwiZ2l2ZW5fbmFtZSI6IiIsImZhbWlseV9uYW1lIjoiIiwiZW1haWwiOiJib25kMDA3QHVrLmNvbSJ9.we-dont-check-signature" //nolint:lll
 	s.req.Header.Add(echo.HeaderAuthorization, bearerPrefix+token)
+
+	s.introspector.EXPECT().IntrospectToken(s.req.Context(), token).
+		Return(&keycloakclient.IntrospectTokenResult{Active: true}, nil)
+
+	var uid types.UserID
+
+	err := s.authMdlwr(func(c echo.Context) error {
+		uid = middlewares.MustUserID(c)
+		return nil
+	})(s.ctx)
+	s.Require().NoError(err)
+	s.Equal("5cb40dc0-a249-4783-a301-9e1f3cf3ea41", uid.String())
+}
+
+func (s *KeycloakTokenAuthSuite) TestValidToken_WS() {
+	const token = "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJIR1lJcHN1UXlsZFNJZTB1T0JaeEpuQjBkZlFuTWI5LUlFcmx6NHk5ek9BIn0.eyJleHAiOjI2NjcxOTk1ODAsImlhdCI6MTY2NzE5OTI4MCwiYXV0aF90aW1lIjoxNjY3MTk4OTI4LCJqdGkiOiI5NGQ3ZDBkNS0zZTZmLTQ5NGItYTkzYy1hYjliMDkxMzQ3YmEiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwMTAvcmVhbG1zL0JhbmsiLCJhdWQiOlsiY2hhdC11aS1jbGllbnQiLCJhY2NvdW50Il0sInN1YiI6IjVjYjQwZGMwLWEyNDktNDc4My1hMzAxLTllMWYzY2YzZWE0MSIsInR5cCI6IkJlYXJlciIsImF6cCI6ImNoYXQtdWktY2xpZW50Iiwibm9uY2UiOiJiYTM3ZmQ1YS04YzM5LTQ4MTQtYWZjYi05NTJhMThiNzI2N2QiLCJzZXNzaW9uX3N0YXRlIjoiZDg2ZDE5OGUtYzFjNS00ZWRkLTgzNTAtMzYxZWU1ODE3MWYyIiwiYWNyIjoiMCIsImFsbG93ZWQtb3JpZ2lucyI6WyIiLCIqIl0sInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJvZmZsaW5lX2FjY2VzcyIsImRlZmF1bHQtcm9sZXMtYmFuayIsInVtYV9hdXRob3JpemF0aW9uIl19LCJyZXNvdXJjZV9hY2Nlc3MiOnsiY2hhdC11aS1jbGllbnQiOnsicm9sZXMiOlsic3VwcG9ydC1jaGF0LWNsaWVudCJdfSwiYWNjb3VudCI6eyJyb2xlcyI6WyJtYW5hZ2UtYWNjb3VudCIsIm1hbmFnZS1hY2NvdW50LWxpbmtzIiwidmlldy1wcm9maWxlIl19fSwic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSBlbWFpbCIsInNpZCI6ImQ4NmQxOThlLWMxYzUtNGVkZC04MzUwLTM2MWVlNTgxNzFmMiIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJib25kMDA3IiwiZ2l2ZW5fbmFtZSI6IiIsImZhbWlseV9uYW1lIjoiIiwiZW1haWwiOiJib25kMDA3QHVrLmNvbSJ9.we-dont-check-signature" //nolint:lll
+	s.req.Header.Add(headerSecWsProtocol, protocol+", "+token)
 
 	s.introspector.EXPECT().IntrospectToken(s.req.Context(), token).
 		Return(&keycloakclient.IntrospectTokenResult{Active: true}, nil)
