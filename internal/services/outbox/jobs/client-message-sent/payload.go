@@ -1,4 +1,4 @@
-package sendclientmessagejob
+package clientmessagesentjob
 
 import (
 	"fmt"

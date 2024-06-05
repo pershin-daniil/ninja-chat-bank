@@ -1,6 +1,7 @@
 package clientevents
 
 import (
+	"errors"
 	"fmt"
 
 	eventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream"
@@ -8,48 +9,58 @@ import (
 	"github.com/pershin-daniil/ninja-chat-bank/pkg/pointer"
 )
 
+var ErrUnexpectedEventType = errors.New("unexpected event type")
+
 var _ websocketstream.EventAdapter = Adapter{}
 
 type Adapter struct{}
 
 func (Adapter) Adapt(ev eventstream.Event) (any, error) {
-	if err := ev.Validate(); err != nil {
-		return nil, fmt.Errorf("event validate: %v", err)
-	}
-
-	switch t := ev.(type) {
+	switch e := ev.(type) {
 	case *eventstream.NewMessageEvent:
 		event := Event{}
+
 		err := event.FromNewMessageEvent(
 			NewMessageEvent{
-				AuthorID:  pointer.PtrWithZeroAsNil(t.UserID),
-				Body:      t.MessageBody,
-				CreatedAt: &t.Time,
-				ID:        t.ID,
-				EventType: EventTypeNewMessageEvent,
-				IsService: &t.IsService,
-				MessageID: t.MessageID,
-				RequestID: t.RequestID,
+				AuthorId:  pointer.PtrWithZeroAsNil(e.UserID),
+				Body:      e.MessageBody,
+				CreatedAt: e.CreatedAt,
+				EventId:   e.EventID,
+				IsService: e.IsService,
+				MessageId: e.MessageID,
+				RequestId: e.RequestID,
 			})
 		if err != nil {
 			return nil, fmt.Errorf("from new message event: %v", err)
 		}
-		return event, nil
 
+		return event, nil
 	case *eventstream.MessageSentEvent:
 		event := Event{}
+
 		err := event.FromMessageSentEvent(MessageSentEvent{
-			ID:        t.ID,
-			EventType: EventTypeMessageSentEvent,
-			MessageID: t.MessageID,
-			RequestID: t.RequestID,
+			EventId:   e.EventID,
+			MessageId: e.MessageID,
+			RequestId: e.RequestID,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("from message sent event: %v", err)
+			return nil, fmt.Errorf("from new message event: %v", err)
 		}
-		return event, nil
 
-	default:
-		return nil, fmt.Errorf("unknown event type: %s", t)
+		return event, nil
+	case *eventstream.MessageBlockEvent:
+		event := Event{}
+
+		err := event.FromMessageBlockedEvent(MessageBlockedEvent{
+			EventId:   e.EventID,
+			MessageId: e.MessageID,
+			RequestId: e.RequestID,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("from new message event: %v", err)
+		}
+
+		return event, nil
 	}
+	return nil, ErrUnexpectedEventType
 }

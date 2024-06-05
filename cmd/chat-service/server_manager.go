@@ -4,7 +4,9 @@ import (
 	"fmt"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/labstack/echo/v4"
+	oapimdlwr "github.com/oapi-codegen/echo-middleware"
 	"go.uber.org/zap"
 
 	keycloakclient "github.com/pershin-daniil/ninja-chat-bank/internal/clients/keycloak"
@@ -70,7 +72,7 @@ func initServerManager( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/
 		allowOrigins,
 		secWsProtocol,
 	)
-	wsManagerHandler, err := websocketstream.NewHTTPHandler(
+	wsHandler, err := websocketstream.NewHTTPHandler(
 		websocketstream.NewOptions(
 			zap.L(),
 			eventStream,
@@ -88,14 +90,21 @@ func initServerManager( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/
 		addr,
 		allowOrigins,
 		v1Swagger,
-		func(g *echo.Group) {
-			managerv1.RegisterHandlers(g, v1Handlers)
+		func(e *echo.Echo) {
+			e.GET("/ws", wsHandler.Serve)
+			v1 := e.Group("v1", oapimdlwr.OapiRequestValidatorWithOptions(v1Swagger, &oapimdlwr.Options{
+				Options: openapi3filter.Options{
+					ExcludeRequestBody:  false,
+					ExcludeResponseBody: true,
+					AuthenticationFunc:  openapi3filter.NoopAuthenticationFunc,
+				},
+			}))
+			managerv1.RegisterHandlers(v1, v1Handlers)
 		},
 		client,
 		resource,
 		role,
 		secWsProtocol,
-		wsManagerHandler,
 		errHandler.Handle,
 	))
 	if err != nil {

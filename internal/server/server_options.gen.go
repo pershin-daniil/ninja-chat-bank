@@ -9,7 +9,6 @@ import (
 	validator461e464ebed9 "github.com/kazhuravlev/options-gen/pkg/validator"
 	"github.com/labstack/echo/v4"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/middlewares"
-	websocketstream "github.com/pershin-daniil/ninja-chat-bank/internal/websocket-stream"
 	"go.uber.org/zap"
 )
 
@@ -20,12 +19,11 @@ func NewOptions(
 	addr string,
 	allowOrigins []string,
 	v1Swagger *openapi3.T,
-	registerHandlers func(e *echo.Group),
+	registerHandlers func(e *echo.Echo),
 	introspector middlewares.Introspector,
 	resource string,
 	role string,
 	wsSecProtocol string,
-	wsHandler *websocketstream.HTTPHandler,
 	errHandler echo.HTTPErrorHandler,
 	options ...OptOptionsSetter,
 ) Options {
@@ -42,7 +40,6 @@ func NewOptions(
 	o.resource = resource
 	o.role = role
 	o.wsSecProtocol = wsSecProtocol
-	o.wsHandler = wsHandler
 	o.errHandler = errHandler
 
 	for _, opt := range options {
@@ -62,7 +59,6 @@ func (o *Options) Validate() error {
 	errs.Add(errors461e464ebed9.NewValidationError("resource", _validate_Options_resource(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("role", _validate_Options_role(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("wsSecProtocol", _validate_Options_wsSecProtocol(o)))
-	errs.Add(errors461e464ebed9.NewValidationError("wsHandler", _validate_Options_wsHandler(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("errHandler", _validate_Options_errHandler(o)))
 	return errs.AsError()
 }
@@ -126,13 +122,6 @@ func _validate_Options_role(o *Options) error {
 func _validate_Options_wsSecProtocol(o *Options) error {
 	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.wsSecProtocol, "required"); err != nil {
 		return fmt461e464ebed9.Errorf("field `wsSecProtocol` did not pass the test: %w", err)
-	}
-	return nil
-}
-
-func _validate_Options_wsHandler(o *Options) error {
-	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.wsHandler, "required"); err != nil {
-		return fmt461e464ebed9.Errorf("field `wsHandler` did not pass the test: %w", err)
 	}
 	return nil
 }

@@ -20,82 +20,68 @@ paths:
                 $ref: '#/components/schemas/Event'
 
 components:
- schemas:
+  schemas:
     Event:
       oneOf:
-        - $ref: "#/components/schemas/MessageSentEvent"
         - $ref: "#/components/schemas/NewMessageEvent"
+        - $ref: "#/components/schemas/MessageSentEvent"
+        - $ref: "#/components/schemas/MessageBlockedEvent"
       discriminator:
         propertyName: eventType
+        mapping:
+          NewMessageEvent: "#/components/schemas/NewMessageEvent"
+          MessageSentEvent: "#/components/schemas/MessageSentEvent"
+          MessageBlockedEvent: "#/components/schemas/MessageBlockedEvent"
+
+    EventCommon:
+      type: object
+      required: [ eventId, eventType, messageId, requestId ]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          x-go-type: types.EventID
+          x-go-type-import:
+            path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+        eventType:
+          type: string
+        messageId:
+          type: string
+          format: uuid
+          x-go-type: types.MessageID
+          x-go-type-import:
+            path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+        requestId:
+          type: string
+          format: uuid
+          x-go-type: types.RequestID
+          x-go-type-import:
+            path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
 
     NewMessageEvent:
-      required: [ eventId, messageId, requestId, eventType, body ]
-      properties:
-        eventId:
-          $ref: "#/components/schemas/EventID"
-        messageId:
-          $ref: "#/components/schemas/MessageID"
-        requestId:
-          $ref: "#/components/schemas/RequestID"
-        eventType:
-          $ref: "#/components/schemas/EventType"
-        authorId:
-          $ref: "#/components/schemas/AuthorID"
-        body:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-        isService:
-          type: boolean
+      allOf:
+        - $ref: '#/components/schemas/EventCommon'
+        - type: object
+          required: [ body, createdAt, isService ]
+          properties:
+            authorId:
+              type: string
+              format: uuid
+              x-go-type: types.UserID
+              x-go-type-import:
+                path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+            body:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            isService:
+              type: boolean
 
     MessageSentEvent:
-      required: [ eventId, messageId, requestId, eventType ]
-      properties:
-        eventId:
-          $ref: "#/components/schemas/EventID"
-        messageId:
-          $ref: "#/components/schemas/MessageID"
-        requestId:
-          $ref: "#/components/schemas/RequestID"
-        eventType:
-          $ref: "#/components/schemas/EventType"
+      allOf:
+        - $ref: "#/components/schemas/EventCommon"
 
-    EventType:
-      type: string
-      enum:
-        - NewMessageEvent
-        - MessageSentEvent
-        - MessageBlockedEvent
-
-    EventID:
-      type: string
-      format: uuid
-      x-go-type: types.EventID
-      x-go-name: ID
-      x-go-type-import:
-        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
-
-    AuthorID:
-      type: string
-      format: uuid
-      x-go-type: types.UserID
-      x-go-name: AuthorID
-      x-go-type-import:
-        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
-
-    RequestID:
-      type: string
-      format: uuid
-      x-go-type: types.RequestID
-      x-go-name: RequestID
-      x-go-type-import:
-        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
-
-    MessageID:
-      type: string
-      format: uuid
-      x-go-type: types.MessageID
-      x-go-name: MessageID
-      x-go-type-import:
-        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+    MessageBlockedEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventCommon"

@@ -1,4 +1,4 @@
-package sendclientmessagejob
+package clientmessageblockedjob
 
 import (
 	"fmt"

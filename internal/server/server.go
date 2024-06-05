@@ -8,15 +8,12 @@ import (
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/labstack/echo/v4"
 	echomdlwr "github.com/labstack/echo/v4/middleware"
-	oapimdlwr "github.com/oapi-codegen/echo-middleware"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/middlewares"
-	websocketstream "github.com/pershin-daniil/ninja-chat-bank/internal/websocket-stream"
 )
 
 const (
@@ -27,17 +24,16 @@ const (
 
 //go:generate options-gen -out-filename=server_options.gen.go -from-struct=Options
 type Options struct {
-	logger           *zap.Logger                  `option:"mandatory" validate:"required"`
-	addr             string                       `option:"mandatory" validate:"required,hostname_port"`
-	allowOrigins     []string                     `option:"mandatory" validate:"min=1"`
-	v1Swagger        *openapi3.T                  `option:"mandatory" validate:"required"`
-	registerHandlers func(e *echo.Group)          `option:"mandatory" validate:"required"`
-	introspector     middlewares.Introspector     `option:"mandatory" validate:"required"`
-	resource         string                       `option:"mandatory" validate:"required"`
-	role             string                       `option:"mandatory" validate:"required"`
-	wsSecProtocol    string                       `option:"mandatory" validate:"required"`
-	wsHandler        *websocketstream.HTTPHandler `option:"mandatory" validate:"required"`
-	errHandler       echo.HTTPErrorHandler        `option:"mandatory" validate:"required"`
+	logger           *zap.Logger              `option:"mandatory" validate:"required"`
+	addr             string                   `option:"mandatory" validate:"required,hostname_port"`
+	allowOrigins     []string                 `option:"mandatory" validate:"min=1"`
+	v1Swagger        *openapi3.T              `option:"mandatory" validate:"required"`
+	registerHandlers func(e *echo.Echo)       `option:"mandatory" validate:"required"`
+	introspector     middlewares.Introspector `option:"mandatory" validate:"required"`
+	resource         string                   `option:"mandatory" validate:"required"`
+	role             string                   `option:"mandatory" validate:"required"`
+	wsSecProtocol    string                   `option:"mandatory" validate:"required"`
+	errHandler       echo.HTTPErrorHandler    `option:"mandatory" validate:"required"`
 }
 
 type Server struct {
@@ -63,17 +59,7 @@ func New(opts Options) (*Server, error) {
 		echomdlwr.BodyLimit(bodyLimit),
 	)
 
-	v1 := e.Group("v1", oapimdlwr.OapiRequestValidatorWithOptions(opts.v1Swagger, &oapimdlwr.Options{
-		Options: openapi3filter.Options{
-			ExcludeRequestBody:  false,
-			ExcludeResponseBody: true,
-			AuthenticationFunc:  openapi3filter.NoopAuthenticationFunc,
-		},
-	}))
-
-	opts.registerHandlers(v1)
-
-	e.GET("/ws", opts.wsHandler.Serve)
+	opts.registerHandlers(e)
 
 	return &Server{
 		lg: opts.logger,

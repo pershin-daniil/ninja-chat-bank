@@ -2,6 +2,7 @@ package inmemeventstream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -10,47 +11,21 @@ import (
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 )
 
+var ErrEventStreamClosed = errors.New("event stream closed")
+
 type Service struct {
-	subs   map[types.UserID][]*subscription
-	mu     sync.RWMutex
+	clients *clients
+
 	closed bool
-}
 
-type subscription struct {
-	eventCh chan eventstream.Event
-	closed  bool
-	mu      sync.Mutex
-}
-
-func newSubscription(done <-chan struct{}) *subscription {
-	sub := &subscription{eventCh: make(chan eventstream.Event)}
-	go func() {
-		<-done
-		sub.mu.Lock()
-		defer sub.mu.Unlock()
-		if !sub.closed {
-			sub.closed = true
-			close(sub.eventCh)
-		}
-	}()
-
-	return sub
-}
-
-func (sub *subscription) sendEvent(event eventstream.Event) {
-	time.Sleep(10 * time.Millisecond)
-
-	sub.mu.Lock()
-	defer sub.mu.Unlock()
-
-	if !sub.closed {
-		sub.eventCh <- event
-	}
+	mu sync.Mutex
+	wg sync.WaitGroup
 }
 
 func New() *Service {
 	return &Service{
-		subs: make(map[types.UserID][]*subscription),
+		clients: newClients(),
+		closed:  false,
 	}
 }
 
@@ -58,26 +33,45 @@ func (s *Service) Subscribe(ctx context.Context, userID types.UserID) (<-chan ev
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	sub := newSubscription(ctx.Done())
-	s.subs[userID] = append(s.subs[userID], sub)
+	if s.closed {
+		return nil, ErrEventStreamClosed
+	}
 
-	return sub.eventCh, nil
+	client := s.clients.add(ctx, userID)
+
+	return client.ch, nil
 }
 
 func (s *Service) Publish(_ context.Context, userID types.UserID, event eventstream.Event) error {
+	s.wg.Add(1)
+	defer s.wg.Done()
+
 	if err := event.Validate(); err != nil {
-		return fmt.Errorf("invalid event: %v", err)
+		return fmt.Errorf("validate event: %v", err)
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if s.closed {
-		return nil
+		return ErrEventStreamClosed
 	}
 
-	for _, sub := range s.subs[userID] {
-		sub.sendEvent(event)
+	for _, c := range s.clients.get(userID) {
+		select {
+		case <-c.ctx.Done():
+			s.clients.remove(c)
+			continue
+		default:
+		}
+
+		timer := time.NewTimer(time.Second)
+		select {
+		case <-timer.C:
+			s.clients.remove(c)
+			continue
+		case c.ch <- event:
+		}
 	}
 
 	return nil
@@ -85,22 +79,9 @@ func (s *Service) Publish(_ context.Context, userID types.UserID, event eventstr
 
 func (s *Service) Close() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.closed = true
+	s.mu.Unlock()
 
-	for _, subs := range s.subs {
-		for _, sub := range subs {
-			func() {
-				sub.mu.Lock()
-				defer sub.mu.Unlock()
-				if !sub.closed {
-					sub.closed = true
-					close(sub.eventCh)
-				}
-			}()
-		}
-	}
-
+	s.wg.Wait()
 	return nil
 }

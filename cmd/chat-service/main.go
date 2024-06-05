@@ -23,11 +23,14 @@ import (
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
 	serverdebug "github.com/pershin-daniil/ninja-chat-bank/internal/server-debug"
 	managerv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/v1"
+	afcverdictsprocessor "github.com/pershin-daniil/ninja-chat-bank/internal/services/afc-verdicts-processor"
 	inmemeventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream/in-mem"
 	managerload "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-load"
 	inmemmanagerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool/in-mem"
 	msgproducer "github.com/pershin-daniil/ninja-chat-bank/internal/services/msg-producer"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
+	clientmessageblockedjob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/client-message-blocked"
+	clientmessagesentjob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/client-message-sent"
 	sendclientmessagejob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/send-client-message"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
 )
@@ -162,18 +165,41 @@ func run() (errReturned error) {
 		return fmt.Errorf("failed to init message producer: %v", err)
 	}
 
+	eventStream := inmemeventstream.New()
+	defer func() {
+		if e := eventStream.Close(); err != nil {
+			zap.L().Warn("failed to close inmem event stream", zap.Error(e))
+		}
+	}()
+
 	for _, j := range []outbox.Job{
-		sendclientmessagejob.Must(sendclientmessagejob.NewOptions(msgProducer, msgRepo)),
+		sendclientmessagejob.Must(sendclientmessagejob.NewOptions(msgProducer, msgRepo, eventStream)),
+		clientmessageblockedjob.Must(clientmessageblockedjob.NewOptions(msgRepo, eventStream)),
+		clientmessagesentjob.Must(clientmessagesentjob.NewOptions(msgRepo, eventStream)),
 	} {
 		outBox.MustRegisterJob(j)
 	}
 
-	eventStream := inmemeventstream.New()
-	defer func() {
-		if e := eventStream.Close(); e != nil {
-			zap.L().Warn("failed to close inmem event stream", zap.Error(e))
-		}
-	}()
+	// AFC verdict processor
+	afcVerdictProcessor, err := afcverdictsprocessor.New(afcverdictsprocessor.NewOptions(
+		cfg.Services.AFCVerdictProcessorConfig.Brokers,
+		cfg.Services.AFCVerdictProcessorConfig.Consumers,
+		cfg.Services.AFCVerdictProcessorConfig.ConsumerGroup,
+		cfg.Services.AFCVerdictProcessorConfig.VerdictsTopic,
+		afcverdictsprocessor.NewKafkaReader,
+		afcverdictsprocessor.NewKafkaDLQWriter(
+			cfg.Services.AFCVerdictProcessorConfig.Brokers,
+			cfg.Services.AFCVerdictProcessorConfig.VerdictsDlqTopic,
+		),
+		db,
+		msgRepo,
+		outBox,
+		afcverdictsprocessor.WithVerdictsSignKey(cfg.Services.AFCVerdictProcessorConfig.VerdictsSigningPublicKey),
+		afcverdictsprocessor.WithProcessBatchSize(cfg.Services.AFCVerdictProcessorConfig.BatchSize),
+	))
+	if err != nil {
+		return fmt.Errorf("AFC verdict processor: %v", err)
+	}
 
 	srvClient, err := initServerClient(
 		cfg.IsProduction(),
@@ -230,6 +256,7 @@ func run() (errReturned error) {
 
 	// Run services.
 	eg.Go(func() error { return outBox.Run(ctx) })
+	eg.Go(func() error { return afcVerdictProcessor.Run(ctx) })
 
 	if err = eg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("failed to wait app stop: %v", err)
