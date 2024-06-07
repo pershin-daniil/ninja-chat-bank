@@ -19,13 +19,18 @@ import (
 	jobsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/jobs"
 	messagesrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/messages"
 	problemsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/problems"
+	clientevents "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/events"
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
 	serverdebug "github.com/pershin-daniil/ninja-chat-bank/internal/server-debug"
 	managerv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/v1"
+	afcverdictsprocessor "github.com/pershin-daniil/ninja-chat-bank/internal/services/afc-verdicts-processor"
+	inmemeventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream/in-mem"
 	managerload "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-load"
 	inmemmanagerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool/in-mem"
 	msgproducer "github.com/pershin-daniil/ninja-chat-bank/internal/services/msg-producer"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
+	clientmessageblockedjob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/client-message-blocked"
+	clientmessagesentjob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/client-message-sent"
 	sendclientmessagejob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/send-client-message"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
 )
@@ -69,7 +74,17 @@ func run() (errReturned error) {
 		return fmt.Errorf("failed to get client swagger: %v", err)
 	}
 
-	srvDebug, err := serverdebug.New(serverdebug.NewOptions(cfg.Servers.Debug.Addr, clientSwagger, managerSwagger))
+	eventsSwagger, err := clientevents.GetSwagger()
+	if err != nil {
+		return fmt.Errorf("failed to get events swagger: %v", err)
+	}
+
+	srvDebug, err := serverdebug.New(serverdebug.NewOptions(
+		cfg.Servers.Debug.Addr,
+		clientSwagger,
+		managerSwagger,
+		eventsSwagger,
+	))
 	if err != nil {
 		return fmt.Errorf("failed to init debug server: %v", err)
 	}
@@ -129,7 +144,7 @@ func run() (errReturned error) {
 		return fmt.Errorf("failed to init jobs repo: %v", err)
 	}
 
-	outboxService, err := outbox.New(outbox.NewOptions(
+	outBox, err := outbox.New(outbox.NewOptions(
 		cfg.Services.OutboxConfig.Workers,
 		cfg.Services.OutboxConfig.IdleTime,
 		cfg.Services.OutboxConfig.ReserveFor,
@@ -150,20 +165,48 @@ func run() (errReturned error) {
 		return fmt.Errorf("failed to init message producer: %v", err)
 	}
 
-	sendMessageJob, err := sendclientmessagejob.New(sendclientmessagejob.NewOptions(
-		msgProducer,
-		msgRepo,
-	))
-	if err != nil {
-		return fmt.Errorf("failed to init send message job: %v", err)
+	eventStream := inmemeventstream.New()
+	defer func() {
+		if e := eventStream.Close(); err != nil {
+			zap.L().Warn("failed to close inmem event stream", zap.Error(e))
+		}
+	}()
+
+	for _, j := range []outbox.Job{
+		sendclientmessagejob.Must(sendclientmessagejob.NewOptions(msgProducer, msgRepo, eventStream)),
+		clientmessageblockedjob.Must(clientmessageblockedjob.NewOptions(msgRepo, eventStream)),
+		clientmessagesentjob.Must(clientmessagesentjob.NewOptions(msgRepo, eventStream)),
+	} {
+		outBox.MustRegisterJob(j)
 	}
 
-	outboxService.MustRegisterJob(sendMessageJob)
+	// AFC verdict processor
+	afcVerdictProcessor, err := afcverdictsprocessor.New(afcverdictsprocessor.NewOptions(
+		cfg.Services.AFCVerdictProcessorConfig.Brokers,
+		cfg.Services.AFCVerdictProcessorConfig.Consumers,
+		cfg.Services.AFCVerdictProcessorConfig.ConsumerGroup,
+		cfg.Services.AFCVerdictProcessorConfig.VerdictsTopic,
+		afcverdictsprocessor.NewKafkaReader,
+		afcverdictsprocessor.NewKafkaDLQWriter(
+			cfg.Services.AFCVerdictProcessorConfig.Brokers,
+			cfg.Services.AFCVerdictProcessorConfig.VerdictsDlqTopic,
+		),
+		db,
+		msgRepo,
+		outBox,
+		afcverdictsprocessor.WithVerdictsSignKey(cfg.Services.AFCVerdictProcessorConfig.VerdictsSigningPublicKey),
+		afcverdictsprocessor.WithProcessBatchSize(cfg.Services.AFCVerdictProcessorConfig.BatchSize),
+	))
+	if err != nil {
+		return fmt.Errorf("AFC verdict processor: %v", err)
+	}
 
 	srvClient, err := initServerClient(
 		cfg.IsProduction(),
 		cfg.Servers.Client.Addr,
 		cfg.Servers.Client.AllowOrigins,
+		cfg.Servers.Client.SecWSProtocol,
+		eventStream,
 		clientSwagger,
 		kcClient,
 		cfg.Servers.Client.RequiredAccess.Resource,
@@ -171,7 +214,7 @@ func run() (errReturned error) {
 		msgRepo,
 		chatRepo,
 		problemRepo,
-		outboxService,
+		outBox,
 		db,
 	)
 	if err != nil {
@@ -191,6 +234,8 @@ func run() (errReturned error) {
 		cfg.IsProduction(),
 		cfg.Servers.Manager.Addr,
 		cfg.Servers.Manager.AllowOrigins,
+		cfg.Servers.Manager.SecWSProtocol,
+		eventStream,
 		managerSwagger,
 		kcClient,
 		cfg.Servers.Manager.RequiredAccess.Resource,
@@ -208,7 +253,10 @@ func run() (errReturned error) {
 	eg.Go(func() error { return srvDebug.Run(ctx) })
 	eg.Go(func() error { return srvClient.Run(ctx) })
 	eg.Go(func() error { return srvManager.Run(ctx) })
-	eg.Go(func() error { return outboxService.Run(ctx) })
+
+	// Run services.
+	eg.Go(func() error { return outBox.Run(ctx) })
+	eg.Go(func() error { return afcVerdictProcessor.Run(ctx) })
 
 	if err = eg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("failed to wait app stop: %v", err)

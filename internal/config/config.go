@@ -41,12 +41,14 @@ type ServersConfig struct {
 type ClientServerConfig struct {
 	Addr           string         `toml:"addr" validate:"required,hostname_port"`
 	AllowOrigins   []string       `toml:"allow_origins" validate:"dive,required,url"`
+	SecWSProtocol  string         `toml:"sec_ws_protocol" validate:"required"`
 	RequiredAccess RequiredAccess `toml:"required_access" validate:"required"`
 }
 
 type ManagerServerConfig struct {
 	Addr           string         `toml:"addr" validate:"required,hostname_port"`
 	AllowOrigins   []string       `toml:"allow_origins" validate:"dive,required,url"`
+	SecWSProtocol  string         `toml:"sec_ws_protocol" validate:"required"`
 	RequiredAccess RequiredAccess `toml:"required_access" validate:"required"`
 }
 
@@ -76,15 +78,26 @@ type PostgresConfig struct {
 }
 
 type ServicesConfig struct {
-	MsgProducerConfig MsgProducerConfig `toml:"msg_producer"`
-	OutboxConfig      OutboxConfig      `toml:"outbox"`
-	ManagerLoadConfig ManagerLoadConfig `toml:"manager_load"`
+	MsgProducerConfig         MsgProducerConfig          `toml:"msg_producer"`
+	OutboxConfig              OutboxConfig               `toml:"outbox"`
+	ManagerLoadConfig         ManagerLoadConfig          `toml:"manager_load"`
+	AFCVerdictProcessorConfig AFCVerdictsProcessorConfig `toml:"afc_verdicts_processor"`
+}
+
+type AFCVerdictsProcessorConfig struct {
+	Brokers                  []string `toml:"brokers" validate:"dive,required,hostname_port,min=1"`
+	Consumers                int      `toml:"consumers" validate:"min=1,max=1000"`
+	ConsumerGroup            string   `toml:"consumer_group" validate:"required"`
+	VerdictsTopic            string   `toml:"verdicts_topic" validate:"required"`
+	VerdictsDlqTopic         string   `toml:"verdicts_dlq_topic" validate:"required"`
+	VerdictsSigningPublicKey string   `toml:"verdicts_signing_public_key" validate:"required"`
+	BatchSize                int      `toml:"batch_size" validate:"min=1,max=1000"`
 }
 
 type MsgProducerConfig struct {
-	Brokers    []string `toml:"brokers" validate:"dive,required,hostname_port"`
+	Brokers    []string `toml:"brokers" validate:"dive,required,hostname_port,min=1"`
 	Topic      string   `toml:"topic" validate:"required"`
-	BatchSize  int      `toml:"batch_size" validate:"required,gte=1"`
+	BatchSize  int      `toml:"batch_size" validate:"required,min=1,max=1000"`
 	EncryptKey string   `toml:"encrypt_key"`
 }
 

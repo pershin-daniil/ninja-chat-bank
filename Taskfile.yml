@@ -24,7 +24,7 @@ vars:
     github.com/daixiang0/gci@v0.13.4
     github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.1.0
     github.com/kazhuravlev/options-gen/cmd/options-gen@v0.32.0
-    github.com/onsi/ginkgo/v2/ginkgo@v2.17.1
+    github.com/onsi/ginkgo/v2/ginkgo@v2.18.0
     go.uber.org/mock/mockgen@v0.4.0
     mvdan.cc/gofumpt@v0.6.0
 
@@ -37,6 +37,8 @@ vars:
 
   TYPES: |
     ChatID
+    EventID
+    EventClientID
     FailedJobID
     JobID
     MessageID
@@ -58,6 +60,10 @@ vars:
   CLIENT_V1_SRC: ./api/client.v1.swagger.yml
   CLIENT_V1_DST: ./internal/server-client/v1/server.gen.go
 
+  CLIENT_EVENTS_PKG: clientevents
+  CLIENT_EVENTS_SRC: ./api/client.events.swagger.yml
+  CLIENT_EVENTS_DST: ./internal/server-client/events/events.gen.go
+
   MANAGER_V1_PKG: managerv1
   MANAGER_V1_SRC: ./api/manager.v1.swagger.yml
   MANAGER_V1_DST: ./internal/server-manager/v1/server.gen.go
@@ -65,6 +71,9 @@ vars:
   ### E2E tests ###
   E2E_CLIENT_V1_DST: ./tests/e2e/api/client/v1/client.gen.go
   E2E_CLIENT_V1_PKG: apiclientv1
+
+  E2E_CLIENT_EVENTS_DST: ./tests/e2e/api/client/events/events.gen.go
+  E2E_CLIENT_EVENTS_PKG: apiclientevents
   ###
 
 
@@ -140,7 +149,9 @@ tasks:
   tests:e2e:
     env:
       E2E_CLIENT_V1_API_ENDPOINT: http://localhost:8080/v1
-
+      E2E_CLIENT_WS_ENDPOINT: ws://localhost:8080/ws
+      E2E_CLIENT_WS_SEC_PROTOCOL: chat-service-protocol
+      E2E_CLIENT_WS_ORIGIN: http://localhost:3000 # Emulate client UI.
       E2E_KEYCLOAK_BASE_PATH: http://localhost:3010
       E2E_KEYCLOAK_REALM: Bank
       E2E_KEYCLOAK_CLIENT_ID: e2e-testing
@@ -197,6 +208,7 @@ tasks:
   gen:api:
     cmds:
       - task: gen:client
+      - task: gen:events
       - task: gen:manager
       - task: tidy
 
@@ -206,6 +218,14 @@ tasks:
     cmds:
       - echo "Generate client server..."
       - ./oapi-codegen -old-config-style -generate skip-prune,types,server,spec -package {{.CLIENT_V1_PKG }} ../../{{.CLIENT_V1_SRC}} > ../../{{.CLIENT_V1_DST}}
+
+  gen:events:
+    internal: true
+    dir: "{{.TOOLS_DIR}}"
+    cmds:
+      - echo "Generate client events..."
+      - ./oapi-codegen --old-config-style -generate skip-prune,types,spec -package {{.CLIENT_EVENTS_PKG}} ../../{{.CLIENT_EVENTS_SRC}} > ../../{{.CLIENT_EVENTS_DST}}
+
 
   gen:manager:
     internal: true
@@ -219,6 +239,8 @@ tasks:
     cmds:
       - echo "[E2E] Generate client API..."
       - ./oapi-codegen --old-config-style -generate types,client -package {{.E2E_CLIENT_V1_PKG}} ../../{{.CLIENT_V1_SRC}} > ../../{{.E2E_CLIENT_V1_DST}}
+      - echo "[E2E] Generate client events..."
+      - ./oapi-codegen --old-config-style -generate skip-prune,types -package {{.E2E_CLIENT_EVENTS_PKG}} ../../{{.CLIENT_EVENTS_SRC}} > ../../{{.E2E_CLIENT_EVENTS_DST}}
       - task: tidy
 
 

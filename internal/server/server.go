@@ -8,10 +8,8 @@ import (
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/labstack/echo/v4"
 	echomdlwr "github.com/labstack/echo/v4/middleware"
-	oapimdlwr "github.com/oapi-codegen/echo-middleware"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -30,10 +28,11 @@ type Options struct {
 	addr             string                   `option:"mandatory" validate:"required,hostname_port"`
 	allowOrigins     []string                 `option:"mandatory" validate:"min=1"`
 	v1Swagger        *openapi3.T              `option:"mandatory" validate:"required"`
-	registerHandlers func(e *echo.Group)      `option:"mandatory" validate:"required"`
+	registerHandlers func(e *echo.Echo)       `option:"mandatory" validate:"required"`
 	introspector     middlewares.Introspector `option:"mandatory" validate:"required"`
 	resource         string                   `option:"mandatory" validate:"required"`
 	role             string                   `option:"mandatory" validate:"required"`
+	wsSecProtocol    string                   `option:"mandatory" validate:"required"`
 	errHandler       echo.HTTPErrorHandler    `option:"mandatory" validate:"required"`
 }
 
@@ -56,19 +55,11 @@ func New(opts Options) (*Server, error) {
 			AllowOrigins: opts.allowOrigins,
 			AllowMethods: []string{http.MethodPost},
 		}),
-		middlewares.NewKeycloakTokenAuth(opts.introspector, opts.resource, opts.role),
+		middlewares.NewKeycloakTokenAuth(opts.introspector, opts.resource, opts.role, opts.wsSecProtocol),
 		echomdlwr.BodyLimit(bodyLimit),
 	)
 
-	v1 := e.Group("v1", oapimdlwr.OapiRequestValidatorWithOptions(opts.v1Swagger, &oapimdlwr.Options{
-		Options: openapi3filter.Options{
-			ExcludeRequestBody:  false,
-			ExcludeResponseBody: true,
-			AuthenticationFunc:  openapi3filter.NoopAuthenticationFunc,
-		},
-	}))
-
-	opts.registerHandlers(v1)
+	opts.registerHandlers(e)
 
 	return &Server{
 		lg: opts.logger,

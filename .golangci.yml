@@ -45,6 +45,9 @@ linters-settings:
       - default
       - prefix(github.com/pershin-daniil/ninja-chat-bank)
 
+  goconst:
+    ignore-strings: 'dlq'
+
   godox:
     keywords:
       - FIXME

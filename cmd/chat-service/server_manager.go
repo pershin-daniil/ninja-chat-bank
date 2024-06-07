@@ -4,17 +4,22 @@ import (
 	"fmt"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/labstack/echo/v4"
+	oapimdlwr "github.com/oapi-codegen/echo-middleware"
 	"go.uber.org/zap"
 
 	keycloakclient "github.com/pershin-daniil/ninja-chat-bank/internal/clients/keycloak"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server-client/errhandler"
+	clientevents "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/events"
 	managerv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/v1"
+	inmemeventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream/in-mem"
 	managerload "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-load"
 	managerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool"
 	canreceiveproblems "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/can-receive-problems"
 	freehands "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands"
+	websocketstream "github.com/pershin-daniil/ninja-chat-bank/internal/websocket-stream"
 )
 
 const nameServerManager = "server-manager"
@@ -23,6 +28,8 @@ func initServerManager( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/
 	isProduction bool,
 	addr string,
 	allowOrigins []string,
+	secWsProtocol string,
+	eventStream *inmemeventstream.Service,
 	v1Swagger *openapi3.T,
 
 	client *keycloakclient.Client,
@@ -60,17 +67,44 @@ func initServerManager( //nolint:revive // https://giphy.com/gifs/5Zesu5VPNGJlm/
 		return nil, fmt.Errorf("failed to create errorHandler: %v", err)
 	}
 
+	wsManagerShutdown := make(chan struct{})
+	wsManagerUpgrader := websocketstream.NewUpgrader(
+		allowOrigins,
+		secWsProtocol,
+	)
+	wsHandler, err := websocketstream.NewHTTPHandler(
+		websocketstream.NewOptions(
+			zap.L(),
+			eventStream,
+			clientevents.Adapter{},
+			websocketstream.JSONEventWriter{},
+			wsManagerUpgrader,
+			wsManagerShutdown,
+		))
+	if err != nil {
+		return nil, fmt.Errorf("failed to init websocket client handler: %v", err)
+	}
+
 	srv, err := server.New(server.NewOptions(
 		lg,
 		addr,
 		allowOrigins,
 		v1Swagger,
-		func(g *echo.Group) {
-			managerv1.RegisterHandlers(g, v1Handlers)
+		func(e *echo.Echo) {
+			e.GET("/ws", wsHandler.Serve)
+			v1 := e.Group("v1", oapimdlwr.OapiRequestValidatorWithOptions(v1Swagger, &oapimdlwr.Options{
+				Options: openapi3filter.Options{
+					ExcludeRequestBody:  false,
+					ExcludeResponseBody: true,
+					AuthenticationFunc:  openapi3filter.NoopAuthenticationFunc,
+				},
+			}))
+			managerv1.RegisterHandlers(v1, v1Handlers)
 		},
 		client,
 		resource,
 		role,
+		secWsProtocol,
 		errHandler.Handle,
 	))
 	if err != nil {

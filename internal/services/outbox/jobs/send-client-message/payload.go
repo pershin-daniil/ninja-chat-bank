@@ -1,42 +1,27 @@
 package sendclientmessagejob
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
-	"github.com/pershin-daniil/ninja-chat-bank/internal/validator"
 )
 
-type payload struct {
-	MessageID types.MessageID `json:"messageId" validate:"required"`
-}
-
-func (p payload) Validate() error {
-	return validator.Validator.Struct(p)
+func UnmarshalPayload(payload string) (types.MessageID, error) {
+	var messageID types.MessageID
+	err := messageID.UnmarshalText([]byte(payload))
+	if err != nil {
+		return types.MessageID{}, fmt.Errorf("unmarshal messageID: %v", err)
+	}
+	return messageID, nil
 }
 
 func MarshalPayload(messageID types.MessageID) (string, error) {
-	p := payload{
-		MessageID: messageID,
+	if err := messageID.Validate(); err != nil {
+		return "", fmt.Errorf("validate messageID: %v", err)
 	}
-
-	if err := p.Validate(); err != nil {
-		return "", fmt.Errorf("validate: %v", err)
-	}
-
-	data, err := json.Marshal(p)
+	payload, err := messageID.MarshalText()
 	if err != nil {
-		return "", fmt.Errorf("marshal: %v", err)
+		return "", fmt.Errorf("marshal messageID: %v", err)
 	}
-
-	return string(data), nil
-}
-
-func unmarshalPayload(data string) (p payload, err error) {
-	if err = json.Unmarshal([]byte(data), &p); err != nil {
-		return payload{}, fmt.Errorf("unmarshal: %v", err)
-	}
-
-	return p, nil
+	return string(payload), nil
 }

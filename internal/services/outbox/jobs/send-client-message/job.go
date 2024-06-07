@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/zap"
-
 	messagesrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/messages"
+	eventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream"
 	msgproducer "github.com/pershin-daniil/ninja-chat-bank/internal/services/msg-producer"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
@@ -24,16 +23,20 @@ type messageRepository interface {
 	GetMessageByID(ctx context.Context, msgID types.MessageID) (*messagesrepo.Message, error)
 }
 
+type eventStream interface {
+	Publish(ctx context.Context, userID types.UserID, event eventstream.Event) error
+}
+
 //go:generate options-gen -out-filename=job_options.gen.go -from-struct=Options
 type Options struct {
 	msgProducer messageProducer   `option:"mandatory" validate:"required"`
 	msgRepo     messageRepository `option:"mandatory" validate:"required"`
+	eventStream eventStream       `option:"mandatory" validate:"required"`
 }
 
 type Job struct {
-	outbox.DefaultJob
 	Options
-	logger *zap.Logger
+	outbox.DefaultJob
 }
 
 func Must(opts Options) *Job {
@@ -46,43 +49,51 @@ func Must(opts Options) *Job {
 
 func New(opts Options) (*Job, error) {
 	if err := opts.Validate(); err != nil {
-		return nil, fmt.Errorf("validate options: %v", err)
+		return &Job{}, fmt.Errorf("validate options: %v", err)
 	}
-
-	return &Job{
-		Options: opts,
-		logger:  zap.L().Named("job." + Name),
-	}, nil
+	return &Job{Options: opts}, nil
 }
 
 func (j *Job) Name() string {
 	return Name
 }
 
-func (j *Job) Handle(ctx context.Context, payload string) (err error) {
-	defer func() {
-		if err != nil {
-			j.logger.With(zap.String("payload", payload), zap.Error(err)).Info("failed")
-		}
-	}()
-
-	p, err := unmarshalPayload(payload)
+func (j *Job) Handle(ctx context.Context, payload string) error {
+	messageID, err := UnmarshalPayload(payload)
 	if err != nil {
 		return fmt.Errorf("unmarshal payload: %v", err)
 	}
 
-	msg, err := j.msgRepo.GetMessageByID(ctx, p.MessageID)
+	message, err := j.msgRepo.GetMessageByID(ctx, messageID)
 	if err != nil {
-		return fmt.Errorf("get message: %v", err)
+		return fmt.Errorf("message repo, get message by id: %v", err)
 	}
 
-	if err = j.msgProducer.ProduceMessage(ctx, msgproducer.Message{
-		ID:         msg.ID,
-		ChatID:     msg.ChatID,
-		Body:       msg.Body,
-		FromClient: !msg.AuthorID.IsZero(),
-	}); err != nil {
-		return fmt.Errorf("roduce message to queue: %v", err)
+	produceMsg := msgproducer.Message{
+		ID:         message.ID,
+		ChatID:     message.ChatID,
+		Body:       message.Body,
+		FromClient: true,
+	}
+
+	err = j.msgProducer.ProduceMessage(ctx, produceMsg)
+	if err != nil {
+		return fmt.Errorf("message producer, produce message: %v", err)
+	}
+
+	event := eventstream.NewNewMessageEvent(
+		types.NewEventID(),
+		message.RequestID,
+		message.ChatID,
+		message.ID,
+		message.AuthorID,
+		message.CreatedAt,
+		message.Body,
+		message.IsService,
+	)
+	err = j.eventStream.Publish(ctx, message.AuthorID, event)
+	if err != nil {
+		return fmt.Errorf("event stream, publish new message event: %v", err)
 	}
 
 	return nil

@@ -11,15 +11,15 @@ addr = ":8079"
 [servers.client]
 addr = ":8080"
 allow_origins = ["http://localhost:3011", "http://localhost:3000"]
-
+sec_ws_protocol = "chat-service-protocol"
 [servers.client.required_access]
 resource = "chat-ui-client"
 role = "support-chat-client"
 
 [servers.manager]
 addr = ":8081"
-allow_origins = ["http://localhost:3011", "http://localhost:3000"]
-
+allow_origins = ["http://localhost:3011", "http://localhost:3001"]
+sec_ws_protocol = "chat-service-protocol"
 [servers.manager.required_access]
 resource = "chat-ui-manager"
 role = "support-chat-manager"
@@ -49,7 +49,7 @@ debug_mode = true
 brokers = ["localhost:9092"]
 topic = "chat.messages"
 batch_size = 1
-encrypt_key = "" # Leave it blank to disable encryption.
+encrypt_key = "51655468576D5A7134743777397A2443" # Leave it blank to disable encryption.
 
 [services.outbox]
 workers = 2
@@ -58,3 +58,17 @@ reserve_for = "5m"
 
 [services.manager_load]
 max_problems_at_same_time = 5
+
+[services.afc_verdicts_processor]
+brokers = ["localhost:9092"]
+consumers = 2
+consumer_group = "afc.msg-analyzers"
+verdicts_topic = "afc.msg-verdicts"
+verdicts_dlq_topic = "afc.msg-verdicts.dlq"
+batch_size = 1
+verdicts_signing_public_key = """
+-----BEGIN PUBLIC KEY-----
+MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAKg4vfl9h1Caqh55IKMoxPXs0JwL2it2
+eJSl6dbfg6YmdcaLcNkz9LbbSBKO7qXhWD1HpPpg6zg+/3NOdK2mF2MCAwEAAQ==
+-----END PUBLIC KEY-----
+"""

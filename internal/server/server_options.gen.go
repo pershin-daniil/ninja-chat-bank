@@ -19,10 +19,11 @@ func NewOptions(
 	addr string,
 	allowOrigins []string,
 	v1Swagger *openapi3.T,
-	registerHandlers func(e *echo.Group),
+	registerHandlers func(e *echo.Echo),
 	introspector middlewares.Introspector,
 	resource string,
 	role string,
+	wsSecProtocol string,
 	errHandler echo.HTTPErrorHandler,
 	options ...OptOptionsSetter,
 ) Options {
@@ -38,6 +39,7 @@ func NewOptions(
 	o.introspector = introspector
 	o.resource = resource
 	o.role = role
+	o.wsSecProtocol = wsSecProtocol
 	o.errHandler = errHandler
 
 	for _, opt := range options {
@@ -56,6 +58,7 @@ func (o *Options) Validate() error {
 	errs.Add(errors461e464ebed9.NewValidationError("introspector", _validate_Options_introspector(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("resource", _validate_Options_resource(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("role", _validate_Options_role(o)))
+	errs.Add(errors461e464ebed9.NewValidationError("wsSecProtocol", _validate_Options_wsSecProtocol(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("errHandler", _validate_Options_errHandler(o)))
 	return errs.AsError()
 }
@@ -112,6 +115,13 @@ func _validate_Options_resource(o *Options) error {
 func _validate_Options_role(o *Options) error {
 	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.role, "required"); err != nil {
 		return fmt461e464ebed9.Errorf("field `role` did not pass the test: %w", err)
+	}
+	return nil
+}
+
+func _validate_Options_wsSecProtocol(o *Options) error {
+	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.wsSecProtocol, "required"); err != nil {
+		return fmt461e464ebed9.Errorf("field `wsSecProtocol` did not pass the test: %w", err)
 	}
 	return nil
 }
