@@ -1,4 +1,4 @@
-package freehands_test
+package freehandssignal_test
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
-	freehands "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands"
+	freehands "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands-signal"
 )
 
 func TestRequest_Validate(t *testing.T) {

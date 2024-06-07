@@ -14,6 +14,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.1
+	github.com/imkira/go-observer v1.0.3
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/kazhuravlev/options-gen v0.32.0
 	github.com/kelseyhightower/envconfig v1.4.0
@@ -23,6 +24,7 @@ require (
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/onsi/ginkgo/v2 v2.18.0
 	github.com/onsi/gomega v1.33.1
+	github.com/quasilyte/go-ruleguard/dsl v0.3.22
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/stretchr/testify v1.9.0
 	github.com/tchap/zapext/v2 v2.1.1

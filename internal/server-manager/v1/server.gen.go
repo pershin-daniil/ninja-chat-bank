@@ -23,6 +23,11 @@ const (
 	BearerAuthScopes = "bearerAuth.Scopes"
 )
 
+// Defines values for ErrorCode.
+const (
+	ErrorCodeManagerOverloaded ErrorCode = 5000
+)
+
 // Error defines model for Error.
 type Error struct {
 	// Code contains HTTP error codes and specific business logic error codes (the last must be >= 1000).
@@ -32,7 +37,12 @@ type Error struct {
 }
 
 // ErrorCode contains HTTP error codes and specific business logic error codes (the last must be >= 1000).
-type ErrorCode = int
+type ErrorCode int
+
+// FreeHandsBtnAvailability defines model for FreeHandsBtnAvailability.
+type FreeHandsBtnAvailability struct {
+	Available bool `json:"available"`
+}
 
 // FreeHandsResponse defines model for FreeHandsResponse.
 type FreeHandsResponse struct {
@@ -42,8 +52,8 @@ type FreeHandsResponse struct {
 
 // GetFreeHandsBtnAvailabilityResponse defines model for GetFreeHandsBtnAvailabilityResponse.
 type GetFreeHandsBtnAvailabilityResponse struct {
-	Data  map[string]interface{} `json:"data"`
-	Error *Error                 `json:"error,omitempty"`
+	Data  *FreeHandsBtnAvailability `json:"data,omitempty"`
+	Error *Error                    `json:"error,omitempty"`
 }
 
 // XRequestIDHeader defines model for XRequestIDHeader.
@@ -176,19 +186,20 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/8yUzW7jNhDHX4WY9tACsqU0PSwE9JDddJu0KBrsBugCqQ9jaixNLJFccug2CPTuBSk7",
-	"tuFk0972JIicz9/Mn4+g7eCsISMB6kdw6HEgIZ//Pn2gz5GCXF9eETbk0xkbqKGbfgswOBDU8Gm2tZxd",
-	"X0IBnj5H9tRALT5SAUF3NGDyXlk/oEANMXIDBciDS/5BPJsWCvhn1toZD856mcqRDmpoWbq4nGs7lI58",
-	"6NjMGjTMfWnY3ONMdyizJZp1yUbIG+zLFDjAuI24TZMP509NwTiOu+Jyvz97b3OTzltHXpjysbYNpe+3",
-	"nlZQwzflnlm59S6z67tkOBbQkCD32fe4wbGAgULAlp65Gw/B3T0ZFlP+xVjAPkn9CA0F7dkJ2zQRbY0g",
-	"m6Cubm9vFCVDlfyCQtOo4EjzirVaxsCGQlC9bVkf2X0nHakeg6ghBlFLUn/Fqjqnn9RZVVXfz6GAgQ0P",
-	"cYD6x6p6ml1C3pJPvb33RFdomvCBgrMm0CnLBgUPerfLe9KSfGnH/lXK09h+IXlK91bMxQa5xyX3LA+v",
-	"Z8em4QQO+5uD+7Ss/7eS45nl+Iu8VaSjZ3n4mOyn5EtCT/4ippXe/b3f6eHXP29hu4uJy3S7F0gn4qa+",
-	"2axsBsjSp5u3aNbqY3RJMupdh6J+R4MteXVxcw0FbMiHaUU2Z4mzdWTQMdRwPq/m51BkkeUCy9UOaCZn",
-	"g5zu2YBrUsM2QxCUGBQH5QmbB7WyXv1t/RpyGo/J57qBGm5s2E8rp9w/M3fPg96blCfP0LhI2Kch51p/",
-	"qKpJqEbI5KrRuZ51rqC8D6n0x4Nn6EuTPV3izP0Ywx+/pdOxgLJ9eQ9fpqg70mvFK5WIqy75qmUUsSbB",
-	"xClGT89y/MLif+Vk/4tkX2Z9IKrc2qGc7hap8EB+s2v8OMQlbai3biAjarKCAqLvt8qqy7K3GvvOBqnf",
-	"VG/OyqSVxfhvAAAA//8Ku/FbHgcAAA==",
+	"H4sIAAAAAAAC/8xUXWvkNhT9K+K20BbssdO0sBj6kI9uM4W2YRPoQjIP1/IdW4ksaaXr2Q3B/71Ink8m",
+	"2d2+7ZOxdL/OuefoGaTtnTVkOED1DA499sTk09/7d/RhoMDzyyvChnw8UwYq6KbfDAz2BBW8z9eR+fwS",
+	"MvD0YVCeGqjYD5RBkB31GLOX1vfIUMEwqAYy4CcX8wN7ZVrI4FPe2lz1znqexuEOKmgVd0M9k7YvHPnQ",
+	"KZM3aJTShVHmAXPZIec1msdCGSZvUBexcIBxXXHdJh3OtqBgHMfNcAnv797bBNJ568izonQsbUPx+72n",
+	"JVTwXbHjrFhnFyn1IgaOGTTEqHTKPQQ4ZtBTCNjSC3fjPnF328Bs6r8YM9g1qZ6hoSC9cqxs3Ii0hlGZ",
+	"IK5ub68FxUAR84JA04jgSKqlkqIegjIUgtC2VfIg7kfuSGgMLPohsKhJ3A9leUq/iZOyLH+aQQZkhh6q",
+	"u1/Lslxk0Cuj+njwS1luNxkX0CZpfMpjeL5CH0USIqTt/H+hwZb8Pyvy2mJDTYL31hNdoWnCOZuzFSqN",
+	"tdKKn443gtOt3qextlYTmiMed7EHPd5RcNYEOi7eIONeXVs/kOS4OtrI44tCmJT1B/FrkL7c/XM9XiXq",
+	"fw8Z9U9y8IqfbuLdNENN6MmfDdF8m7+3G+f++e8trF2TaE+3Oyt3zG6Cr8zSJh4Vx0XBOZpHcTO4aG5x",
+	"0SGLtQzE2fUcMliRD5OYVycRiXVk0Cmo4HRWzk4hS89BGrBYbhhIBNrAx464IdMIFEG1BrXg2G/+Qy88",
+	"YfMk2IqGUIuPijth6KNw3taa+hBlHteBscq8gQqubditMQ2xeyLvXqZ5F1IcPaHjIspz2n6a/ueynB4Z",
+	"w2QSDnROK5kmKB5CBPO894R+lTC2+kqbOCTmbyuiyIQ1IgxSUgiztRSK9nXFvk70RUfyUeBerLBLcZ+s",
+	"JlKpexD1wGzNy+x+xiffON9f4/AXNnCeyDikbKmxnfaw58mEeN+Nd4uIJ5Bfbfg4rHxJK9LW9WRYTFGQ",
+	"weD12phVUWgrUXc2cPWmfHNSRKstxv8CAAD//0YZejAHCAAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

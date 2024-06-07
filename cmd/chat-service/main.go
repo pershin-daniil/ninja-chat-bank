@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"go.uber.org/multierr"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -39,7 +40,7 @@ var configPath = flag.String("config", "configs/config.toml", "Path to config fi
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatalf("failed to run app: %v", err)
+		log.Fatalf("run app: %v", err)
 	}
 }
 
@@ -51,7 +52,7 @@ func run() (errReturned error) {
 
 	cfg, err := config.ParseAndValidate(*configPath)
 	if err != nil {
-		return fmt.Errorf("failed to parse and validate config %q: %v", *configPath, err)
+		return fmt.Errorf("parse and validate config %q: %v", *configPath, err)
 	}
 
 	if err = logger.Init(logger.NewOptions(
@@ -60,191 +61,214 @@ func run() (errReturned error) {
 		logger.WithSentryDSN(cfg.Sentry.DSN),
 		logger.WithSentryEnv(cfg.Global.Env),
 	)); err != nil {
-		return fmt.Errorf("failed to init logger: %v", err)
+		return fmt.Errorf("init logger: %v", err)
 	}
 	defer logger.Sync()
 
-	clientSwagger, err := clientv1.GetSwagger()
-	if err != nil {
-		return fmt.Errorf("failed to get client swagger: %v", err)
-	}
+	lg := zap.L().Named("main")
 
-	managerSwagger, err := managerv1.GetSwagger()
-	if err != nil {
-		return fmt.Errorf("failed to get client swagger: %v", err)
-	}
+	// Storage.
 
-	eventsSwagger, err := clientevents.GetSwagger()
-	if err != nil {
-		return fmt.Errorf("failed to get events swagger: %v", err)
-	}
+	var storage *store.Client
+	{
+		switch s := cfg.Stores.Use; s {
+		case "sqlite":
+			storage, err = store.NewInMemorySQLiteClient()
+		case "psql":
+			if cfg.IsProduction() && cfg.Stores.PSQL.Debug {
+				lg.Warn("psql client in the debug mode")
+			}
 
-	srvDebug, err := serverdebug.New(serverdebug.NewOptions(
-		cfg.Servers.Debug.Addr,
-		clientSwagger,
-		managerSwagger,
-		eventsSwagger,
-	))
-	if err != nil {
-		return fmt.Errorf("failed to init debug server: %v", err)
-	}
-
-	kcClient, err := keycloakclient.New(keycloakclient.NewOptions(
-		cfg.Clients.Keycloak.BasePath,
-		cfg.Clients.Keycloak.Realm,
-		cfg.Clients.Keycloak.ClientID,
-		cfg.Clients.Keycloak.ClientSecret,
-		cfg.IsProduction(),
-		keycloakclient.WithDebugMode(cfg.Clients.Keycloak.DebugMode),
-	))
-	if err != nil {
-		return fmt.Errorf("init keycloak client: %w", err)
-	}
-
-	psqlClient, err := store.NewPSQLClient(store.NewPSQLOptions(
-		cfg.DB.Postgres.Addr,
-		cfg.DB.Postgres.User,
-		cfg.DB.Postgres.Password,
-		cfg.DB.Postgres.Database,
-		cfg.IsProduction(),
-		store.WithDebugMode(cfg.DB.Postgres.DebugMode),
-	))
-	if err != nil {
-		return fmt.Errorf("failed to init psql client: %v", err)
-	}
-	defer func() {
-		if e := psqlClient.Close(); e != nil {
-			zap.L().Warn("failed to close psqlClient", zap.Error(e))
+			storage, err = store.NewPSQLClient(store.NewPSQLOptions(
+				cfg.Stores.PSQL.Addr,
+				cfg.Stores.PSQL.Username,
+				cfg.Stores.PSQL.Password,
+				cfg.Stores.PSQL.Database,
+				store.WithDebug(cfg.Stores.PSQL.Debug),
+			))
+		default:
+			return fmt.Errorf("unsupported storage: %v", s)
 		}
-	}()
+	}
+	if err != nil {
+		return fmt.Errorf("create store client: %v", err)
+	}
+	defer multierr.AppendInvoke(&errReturned, multierr.Close(storage))
 
-	if err = psqlClient.Schema.Create(ctx); err != nil {
-		return fmt.Errorf("failed to init schema: %v", err)
+	// Migrations.
+	if err = storage.Schema.Create(ctx); err != nil {
+		return fmt.Errorf("migrate: %v", err)
 	}
 
-	db := store.NewDatabase(psqlClient)
+	// Repositories.
+	db := store.NewDatabase(storage)
 
-	msgRepo, err := messagesrepo.New(messagesrepo.NewOptions(db))
+	chatsRepo, err := chatsrepo.New(chatsrepo.NewOptions(db))
 	if err != nil {
-		return fmt.Errorf("failed to init message repo: %v", err)
-	}
-
-	chatRepo, err := chatsrepo.New(chatsrepo.NewOptions(db))
-	if err != nil {
-		return fmt.Errorf("failed to init chat repo: %v", err)
-	}
-
-	problemRepo, err := problemsrepo.New(problemsrepo.NewOptions(db))
-	if err != nil {
-		return fmt.Errorf("failed to init problem repo: %v", err)
+		return fmt.Errorf("create chats repo: %v", err)
 	}
 
 	jobsRepo, err := jobsrepo.New(jobsrepo.NewOptions(db))
 	if err != nil {
-		return fmt.Errorf("failed to init jobs repo: %v", err)
+		return fmt.Errorf("create jobs repo: %v", err)
 	}
 
+	msgRepo, err := messagesrepo.New(messagesrepo.NewOptions(db))
+	if err != nil {
+		return fmt.Errorf("create message repo: %v", err)
+	}
+
+	problemsRepo, err := problemsrepo.New(problemsrepo.NewOptions(db))
+	if err != nil {
+		return fmt.Errorf("create problems repo: %v", err)
+	}
+
+	// Clients.
+	kc, err := keycloakclient.New(keycloakclient.NewOptions(
+		cfg.Clients.Keycloak.BasePath,
+		cfg.Clients.Keycloak.Realm,
+		cfg.Clients.Keycloak.ClientID,
+		cfg.Clients.Keycloak.ClientSecret,
+		keycloakclient.WithDebugMode(cfg.Clients.Keycloak.DebugMode),
+	))
+	if err != nil {
+		return fmt.Errorf("create keycloak client: %v", err)
+	}
+	if cfg.IsProduction() && cfg.Clients.Keycloak.DebugMode {
+		zap.L().Warn("keycloak client in the debug mode")
+	}
+
+	// Infrastructure Services.
+	eventStream := inmemeventstream.New()
+	defer multierr.AppendInvoke(&errReturned, multierr.Close(eventStream))
+
+	msgProducer, err := msgproducer.New(msgproducer.NewOptions(
+		msgproducer.NewKafkaWriter(
+			cfg.Services.MsgProducer.Brokers,
+			cfg.Services.MsgProducer.Topic,
+			cfg.Services.MsgProducer.BatchSize,
+		),
+		msgproducer.WithEncryptKey(cfg.Services.MsgProducer.EncryptKey),
+	))
+	if err != nil {
+		return fmt.Errorf("create message producer: %v", err)
+	}
+	defer multierr.AppendInvoke(&errReturned, multierr.Close(msgProducer))
+
 	outBox, err := outbox.New(outbox.NewOptions(
-		cfg.Services.OutboxConfig.Workers,
-		cfg.Services.OutboxConfig.IdleTime,
-		cfg.Services.OutboxConfig.ReserveFor,
+		cfg.Services.Outbox.Workers,
+		cfg.Services.Outbox.IdleTime,
+		cfg.Services.Outbox.ReserveFor,
 		jobsRepo,
 		db,
 	))
 	if err != nil {
-		return fmt.Errorf("failed to init outbox service: %v", err)
+		return fmt.Errorf("create outbox service: %v", err)
 	}
 
-	msgProducer, err := msgproducer.New(msgproducer.NewOptions(
-		msgproducer.NewKafkaWriter(
-			cfg.Services.MsgProducerConfig.Brokers,
-			cfg.Services.MsgProducerConfig.Topic,
-			cfg.Services.MsgProducerConfig.BatchSize,
-		)))
+	managerPool := inmemmanagerpool.New()
+	defer multierr.AppendInvoke(&errReturned, multierr.Close(managerPool))
+
+	// Domain Services.
+	managerLoad, err := managerload.New(managerload.NewOptions(
+		cfg.Services.ManagerLoad.MaxProblemsAtSameTime,
+		problemsRepo,
+	))
 	if err != nil {
-		return fmt.Errorf("failed to init message producer: %v", err)
+		return fmt.Errorf("create manager load service: %v", err)
 	}
 
-	eventStream := inmemeventstream.New()
-	defer func() {
-		if e := eventStream.Close(); err != nil {
-			zap.L().Warn("failed to close inmem event stream", zap.Error(e))
-		}
-	}()
-
-	for _, j := range []outbox.Job{
-		sendclientmessagejob.Must(sendclientmessagejob.NewOptions(msgProducer, msgRepo, eventStream)),
-		clientmessageblockedjob.Must(clientmessageblockedjob.NewOptions(msgRepo, eventStream)),
-		clientmessagesentjob.Must(clientmessagesentjob.NewOptions(msgRepo, eventStream)),
-	} {
-		outBox.MustRegisterJob(j)
-	}
-
-	// AFC verdict processor
+	// Application Services.
 	afcVerdictProcessor, err := afcverdictsprocessor.New(afcverdictsprocessor.NewOptions(
-		cfg.Services.AFCVerdictProcessorConfig.Brokers,
-		cfg.Services.AFCVerdictProcessorConfig.Consumers,
-		cfg.Services.AFCVerdictProcessorConfig.ConsumerGroup,
-		cfg.Services.AFCVerdictProcessorConfig.VerdictsTopic,
+		cfg.Services.AFCVerdictsProcessor.Brokers,
+		cfg.Services.AFCVerdictsProcessor.Consumers,
+		cfg.Services.AFCVerdictsProcessor.ConsumerGroup,
+		cfg.Services.AFCVerdictsProcessor.VerdictsTopic,
 		afcverdictsprocessor.NewKafkaReader,
 		afcverdictsprocessor.NewKafkaDLQWriter(
-			cfg.Services.AFCVerdictProcessorConfig.Brokers,
-			cfg.Services.AFCVerdictProcessorConfig.VerdictsDlqTopic,
+			cfg.Services.AFCVerdictsProcessor.Brokers,
+			cfg.Services.AFCVerdictsProcessor.VerdictsDLQTopic,
 		),
 		db,
 		msgRepo,
 		outBox,
-		afcverdictsprocessor.WithVerdictsSignKey(cfg.Services.AFCVerdictProcessorConfig.VerdictsSigningPublicKey),
-		afcverdictsprocessor.WithProcessBatchSize(cfg.Services.AFCVerdictProcessorConfig.BatchSize),
+		afcverdictsprocessor.WithProcessBatchSize(cfg.Services.AFCVerdictsProcessor.BatchSize),
+		afcverdictsprocessor.WithVerdictsSignKey(cfg.Services.AFCVerdictsProcessor.VerdictsSigningPublicKey),
 	))
 	if err != nil {
-		return fmt.Errorf("AFC verdict processor: %v", err)
+		return fmt.Errorf("create afc verdicts processor: %v", err)
+	}
+
+	// Application Services. Jobs.
+	for _, j := range []outbox.Job{
+		clientmessageblockedjob.Must(clientmessageblockedjob.NewOptions(eventStream, msgRepo)),
+		clientmessagesentjob.Must(clientmessagesentjob.NewOptions(eventStream, msgRepo)),
+		sendclientmessagejob.Must(sendclientmessagejob.NewOptions(eventStream, msgProducer, msgRepo)),
+	} {
+		outBox.MustRegisterJob(j)
+	}
+
+	// Servers.
+	clientV1Swagger, err := clientv1.GetSwagger()
+	if err != nil {
+		return fmt.Errorf("get client v1 swagger: %v", err)
 	}
 
 	srvClient, err := initServerClient(
 		cfg.IsProduction(),
 		cfg.Servers.Client.Addr,
 		cfg.Servers.Client.AllowOrigins,
-		cfg.Servers.Client.SecWSProtocol,
-		eventStream,
-		clientSwagger,
-		kcClient,
+		clientV1Swagger,
+		kc,
 		cfg.Servers.Client.RequiredAccess.Resource,
 		cfg.Servers.Client.RequiredAccess.Role,
-		msgRepo,
-		chatRepo,
-		problemRepo,
+		cfg.Servers.Client.SecWsProtocol,
+		eventStream,
 		outBox,
 		db,
+		chatsRepo,
+		msgRepo,
+		problemsRepo,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to init server: %v", err)
+		return fmt.Errorf("init client server: %v", err)
 	}
 
-	mngPool := inmemmanagerpool.New()
-	mngLoad, err := managerload.New(managerload.NewOptions(
-		cfg.Services.ManagerLoadConfig.MaxProblems,
-		problemRepo,
-	))
+	managerV1Swagger, err := managerv1.GetSwagger()
 	if err != nil {
-		return fmt.Errorf("failed to init load service: %v", err)
+		return fmt.Errorf("get manager v1 swagger: %v", err)
 	}
 
 	srvManager, err := initServerManager(
 		cfg.IsProduction(),
 		cfg.Servers.Manager.Addr,
 		cfg.Servers.Manager.AllowOrigins,
-		cfg.Servers.Manager.SecWSProtocol,
-		eventStream,
-		managerSwagger,
-		kcClient,
+		managerV1Swagger,
+		kc,
 		cfg.Servers.Manager.RequiredAccess.Resource,
 		cfg.Servers.Manager.RequiredAccess.Role,
-		mngLoad,
-		mngPool,
+		cfg.Servers.Manager.SecWsProtocol,
+		eventStream,
+		managerLoad,
+		managerPool,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to init manager server: %v", err)
+		return fmt.Errorf("init manager server: %v", err)
+	}
+
+	clientEventsSwagger, err := clientevents.GetSwagger()
+	if err != nil {
+		return fmt.Errorf("get client events swagger: %v", err)
+	}
+
+	srvDebug, err := serverdebug.New(serverdebug.NewOptions(
+		cfg.Servers.Debug.Addr,
+		clientV1Swagger,
+		managerV1Swagger,
+		clientEventsSwagger,
+	))
+	if err != nil {
+		return fmt.Errorf("init debug server: %v", err)
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -259,7 +283,7 @@ func run() (errReturned error) {
 	eg.Go(func() error { return afcVerdictProcessor.Run(ctx) })
 
 	if err = eg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-		return fmt.Errorf("failed to wait app stop: %v", err)
+		return fmt.Errorf("wait app stop: %v", err)
 	}
 
 	return nil

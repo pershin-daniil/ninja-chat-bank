@@ -19,8 +19,8 @@ type managerPool interface {
 
 //go:generate options-gen -out-filename=usecase_options.gen.go -from-struct=Options
 type Options struct {
-	mngPool managerPool        `option:"mandatory" validate:"required"`
-	mngLoad managerLoadService `option:"mandatory" validate:"required"`
+	mLoadSvc managerLoadService `option:"mandatory" validate:"required"`
+	mPool    managerPool        `option:"mandatory" validate:"required"`
 }
 
 type UseCase struct {
@@ -40,7 +40,7 @@ func (u UseCase) Handle(ctx context.Context, req Request) (Response, error) {
 		return Response{}, fmt.Errorf("failed to validate request: %v", err)
 	}
 
-	ok, err := u.mngPool.Contains(ctx, req.ManagerID)
+	ok, err := u.mPool.Contains(ctx, req.ManagerID)
 	if err != nil {
 		return Response{}, fmt.Errorf("failed to get info from manager pool: %v", err)
 	}
@@ -50,7 +50,7 @@ func (u UseCase) Handle(ctx context.Context, req Request) (Response, error) {
 		return Response{Result: false}, nil
 	}
 
-	ok, err = u.mngLoad.CanManagerTakeProblem(ctx, req.ManagerID)
+	ok, err = u.mLoadSvc.CanManagerTakeProblem(ctx, req.ManagerID)
 	if err != nil {
 		return Response{}, fmt.Errorf("failed to get info from manager load: %v", err)
 	}

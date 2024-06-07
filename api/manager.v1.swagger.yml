@@ -10,12 +10,12 @@ servers:
 paths:
   /getFreeHandsBtnAvailability:
     post:
-      description: check if free hands button is available
+      description: Check availability of "Free Hands" button.
       parameters:
         - $ref: "#/components/parameters/XRequestIDHeader"
       responses:
-        200:
-          description: "OK"
+        '200':
+          description: Button availability flag.
           content:
             application/json:
               schema:
@@ -23,12 +23,12 @@ paths:
 
   /freeHands:
     post:
-      description: make manager status is ready for work
+      description: Send a signal that I'm ready to deal with new problems.
       parameters:
         - $ref: "#/components/parameters/XRequestIDHeader"
       responses:
-        200:
-          description: "OK"
+        '200':
+          description: No data on success.
           content:
             application/json:
               schema:
@@ -57,21 +57,6 @@ components:
       required: true
 
   schemas:
-    GetFreeHandsBtnAvailabilityResponse:
-      required: [ "data" ]
-      properties:
-        data:
-          additionalProperties: true
-        error:
-          $ref: "#/components/schemas/Error"
-
-    FreeHandsResponse:
-      properties:
-        data:
-          type: object
-        error:
-          $ref: "#/components/schemas/Error"
-
     # Common.
 
     Error:
@@ -87,4 +72,32 @@ components:
     ErrorCode:
       type: integer
       description: contains HTTP error codes and specific business logic error codes (the last must be >= 1000).
+      enum:
+        - 5000
+      x-enum-varnames:
+        - ErrorCodeManagerOverloaded
       minimum: 400
+
+    # /getFreeHandsBtnAvailability
+
+    GetFreeHandsBtnAvailabilityResponse:
+      properties:
+        data:
+          $ref: "#/components/schemas/FreeHandsBtnAvailability"
+        error:
+          $ref: "#/components/schemas/Error"
+
+    FreeHandsBtnAvailability:
+      required: [ available ]
+      properties:
+        available:
+          type: boolean
+
+    # /freeHands
+
+    FreeHandsResponse:
+      properties:
+        data:
+          type: object
+        error:
+          $ref: "#/components/schemas/Error"

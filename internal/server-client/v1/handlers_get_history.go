@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	internalerrors "github.com/pershin-daniil/ninja-chat-bank/internal/errors"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/middlewares"
 	gethistory "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/client/get-history"
 	"github.com/pershin-daniil/ninja-chat-bank/pkg/pointer"
@@ -21,46 +22,40 @@ func (h Handlers) PostGetHistory(eCtx echo.Context, params PostGetHistoryParams)
 		return fmt.Errorf("%w: %v", echo.ErrBadRequest, err)
 	}
 
-	request := gethistory.Request{
+	response, err := h.getHistory.Handle(ctx, gethistory.Request{
 		ID:       params.XRequestID,
 		ClientID: clientID,
 		PageSize: pointer.Indirect(req.PageSize),
 		Cursor:   pointer.Indirect(req.Cursor),
+	})
+	if err != nil {
+		if errors.Is(err, gethistory.ErrInvalidRequest) {
+			return internalerrors.NewServerError(http.StatusBadRequest, "invalid request", err)
+		}
+
+		if errors.Is(err, gethistory.ErrInvalidCursor) {
+			return internalerrors.NewServerError(http.StatusBadRequest, "invalid cursor", err)
+		}
+
+		return fmt.Errorf("handle `get-history`: %v", err)
 	}
 
-	response, err := h.getHistoryUseCase.Handle(ctx, request)
-	switch {
-	case errors.Is(err, gethistory.ErrInvalidRequest):
-		fallthrough
-	case errors.Is(err, gethistory.ErrInvalidCursor):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case err != nil:
-		return fmt.Errorf("%w: %v", echo.ErrInternalServerError, err)
-	}
-
-	messages := make([]Message, 0, len(response.Messages))
+	page := make([]Message, 0, len(response.Messages))
 	for _, m := range response.Messages {
-		messages = append(messages, Message{
-			AuthorId:   pointer.PtrWithZeroAsNil(m.AuthorID),
+		mm := Message{
+			AuthorId:   m.AuthorID.AsPointer(),
 			Body:       m.Body,
 			CreatedAt:  m.CreatedAt,
 			Id:         m.ID,
 			IsBlocked:  m.IsBlocked,
 			IsReceived: m.IsReceived,
 			IsService:  m.IsService,
-		})
+		}
+		page = append(page, mm)
 	}
 
-	err = eCtx.JSON(http.StatusOK, GetHistoryResponse{
-		Data: &MessagesPage{
-			Messages: messages,
-			Next:     response.NextCursor,
-		},
-		Error: nil,
-	})
-	if err != nil {
-		return fmt.Errorf("%w: %v", echo.ErrInternalServerError, err)
-	}
-
-	return nil
+	return eCtx.JSON(http.StatusOK, GetHistoryResponse{Data: &MessagesPage{
+		Messages: page,
+		Next:     response.NextCursor,
+	}})
 }

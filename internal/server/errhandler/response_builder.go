@@ -2,6 +2,7 @@ package errhandler
 
 import (
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
+	"github.com/pershin-daniil/ninja-chat-bank/pkg/pointer"
 )
 
 type Response struct {
@@ -9,16 +10,11 @@ type Response struct {
 }
 
 var ResponseBuilder = func(code int, msg string, details string) any {
-	e := clientv1.Error{
-		Code:    clientv1.ErrorCode(code),
-		Message: msg,
-	}
-
-	if details != "" {
-		e.Details = &details
-	}
-
 	return Response{
-		Error: e,
+		Error: clientv1.Error{
+			Code:    clientv1.ErrorCode(code),
+			Message: msg,
+			Details: pointer.PtrWithZeroAsNil(details),
+		},
 	}
 }

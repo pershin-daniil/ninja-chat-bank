@@ -1,66 +1,58 @@
 package clientevents
 
 import (
-	"errors"
 	"fmt"
 
 	eventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream"
 	websocketstream "github.com/pershin-daniil/ninja-chat-bank/internal/websocket-stream"
-	"github.com/pershin-daniil/ninja-chat-bank/pkg/pointer"
 )
-
-var ErrUnexpectedEventType = errors.New("unexpected event type")
 
 var _ websocketstream.EventAdapter = Adapter{}
 
 type Adapter struct{}
 
-func (Adapter) Adapt(ev eventstream.Event) (any, error) {
-	switch e := ev.(type) {
+func (Adapter) Adapt(sEvent eventstream.Event) (any, error) {
+	var event Event
+	var err error
+
+	switch v := sEvent.(type) {
 	case *eventstream.NewMessageEvent:
-		event := Event{}
+		event.EventId = v.EventID
+		event.RequestId = v.RequestID
 
-		err := event.FromNewMessageEvent(
-			NewMessageEvent{
-				AuthorId:  pointer.PtrWithZeroAsNil(e.UserID),
-				Body:      e.MessageBody,
-				CreatedAt: e.CreatedAt,
-				EventId:   e.EventID,
-				IsService: e.IsService,
-				MessageId: e.MessageID,
-				RequestId: e.RequestID,
-			})
-		if err != nil {
-			return nil, fmt.Errorf("from new message event: %v", err)
-		}
+		err = event.FromNewMessageEvent(NewMessageEvent{
+			AuthorId:  v.AuthorID.AsPointer(),
+			Body:      v.MessageBody,
+			CreatedAt: v.CreatedAt,
+			IsService: v.IsService,
+			MessageId: v.MessageID,
+		})
 
-		return event, nil
 	case *eventstream.MessageSentEvent:
-		event := Event{}
+		event.EventId = v.EventID
+		event.RequestId = v.RequestID
 
-		err := event.FromMessageSentEvent(MessageSentEvent{
-			EventId:   e.EventID,
-			MessageId: e.MessageID,
-			RequestId: e.RequestID,
+		err = event.FromMessageSentEvent(MessageSentEvent{
+			MessageId: v.MessageID,
 		})
-		if err != nil {
-			return nil, fmt.Errorf("from new message event: %v", err)
-		}
 
-		return event, nil
-	case *eventstream.MessageBlockEvent:
-		event := Event{}
+	case *eventstream.MessageBlockedEvent:
+		event.EventId = v.EventID
+		event.RequestId = v.RequestID
 
-		err := event.FromMessageBlockedEvent(MessageBlockedEvent{
-			EventId:   e.EventID,
-			MessageId: e.MessageID,
-			RequestId: e.RequestID,
+		err = event.FromMessageBlockedEvent(MessageBlockedEvent{
+			MessageId: v.MessageID,
 		})
-		if err != nil {
-			return nil, fmt.Errorf("from new message event: %v", err)
-		}
 
-		return event, nil
+	default:
+		return nil, fmt.Errorf("unknown client event:%v (%T)", v, v)
 	}
-	return nil, ErrUnexpectedEventType
+	if err != nil {
+		return nil, err
+	}
+	if event.EventId.IsZero() || event.RequestId.IsZero() {
+		panic(fmt.Sprintf("incomplete event: %#v", event))
+	}
+
+	return event, nil
 }

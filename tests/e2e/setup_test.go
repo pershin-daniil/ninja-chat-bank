@@ -66,7 +66,6 @@ var _ = BeforeSuite(func() {
 		kcRealm,
 		kcClientID,
 		kcClientSecret,
-		false,
 		keycloakclient.WithDebugMode(kcClientDebug),
 	))
 	Expect(err).ShouldNot(HaveOccurred())
@@ -181,7 +180,7 @@ func (sc simpleClaims) Valid() error {
 	return nil
 }
 
-func waitForEvent(stream *wsstream.Stream) { //nolint:unused //actually in use
+func waitForEvent(stream *wsstream.Stream) {
 	select {
 	case <-stream.EventSignals():
 	case <-time.After(3 * time.Second):

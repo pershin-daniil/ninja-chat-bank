@@ -21,24 +21,19 @@ vars:
 
   DEV_TOOLS: |
     entgo.io/ent/cmd/ent@v0.13.1
-    github.com/daixiang0/gci@v0.13.4
+    github.com/daixiang0/gci@v0.13.0
     github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.1.0
     github.com/kazhuravlev/options-gen/cmd/options-gen@v0.32.0
+    github.com/moznion/gonstructor/cmd/gonstructor@v0.5.0
     github.com/onsi/ginkgo/v2/ginkgo@v2.18.0
+    github.com/quasilyte/go-ruleguard/cmd/ruleguard@v0.4.2
+    golang.org/x/tools/cmd/goimports@v0.18.0
     go.uber.org/mock/mockgen@v0.4.0
     mvdan.cc/gofumpt@v0.6.0
 
-
-  DOCKER_COMPOSE_PATHS: |
-    ./deploy/local/docker-compose.yml
-    ./deploy/local/docker-compose.sentry.yml
-    ./deploy/local/docker-compose.swagger-ui.yml
-  DOCKER_COMPOSE_CMD: docker compose -f {{ .DOCKER_COMPOSE_PATHS | trim | splitLines | join " -f " }}
-
   TYPES: |
-    ChatID
     EventID
-    EventClientID
+    ChatID
     FailedJobID
     JobID
     MessageID
@@ -47,6 +42,12 @@ vars:
     UserID
   TYPES_PKG: types
   TYPES_DST: ./internal/types/types.gen.go
+
+  DOCKER_COMPOSE_PATHS: |
+    ./deploy/local/docker-compose.yml
+    ./deploy/local/docker-compose.sentry.yml
+    ./deploy/local/docker-compose.swagger-ui.yml
+  DOCKER_COMPOSE_CMD: docker compose -f {{ .DOCKER_COMPOSE_PATHS | trim | splitLines | join " -f " }}
 
   ENT_SCHEMA: ./internal/store/schema
   ENT_TEMPLATES: ./internal/store/templates
@@ -75,7 +76,6 @@ vars:
   E2E_CLIENT_EVENTS_DST: ./tests/e2e/api/client/events/events.gen.go
   E2E_CLIENT_EVENTS_PKG: apiclientevents
   ###
-
 
 tasks:
   default:
@@ -138,14 +138,6 @@ tasks:
       - echo "- Integration tests"
       - go test -tags integration -count 1 -race ./...
 
-  kc:export:
-    cmds:
-      - echo "- Exporting realm"
-      - cmd: docker exec -it local-keycloak-1 /opt/keycloak/bin/kc.sh export --realm Bank --users realm_file --file /tmp/realm.json
-        ignore_error: true # https://github.com/keycloak/keycloak/issues/12957
-      - docker cp local-keycloak-1:/tmp/realm.json {{.KEYCLOAK_REALM_PATH}}
-      - echo "Exported in {{.KEYCLOAK_REALM_PATH}}"
-
   tests:e2e:
     env:
       E2E_CLIENT_V1_API_ENDPOINT: http://localhost:8080/v1
@@ -157,7 +149,7 @@ tasks:
       E2E_KEYCLOAK_CLIENT_ID: e2e-testing
       E2E_KEYCLOAK_CLIENT_SECRET: hD3CVXnQ1k3TTUmUA5eHeARIfTQFxM2U
       E2E_KEYCLOAK_CLIENT_DEBUG: false
-      E2E_KEYCLOAK_CLIENTS: biba,boba
+      E2E_KEYCLOAK_CLIENTS: e2e_client_0,e2e_client_1,e2e_client_2
     dir: "{{.TOOLS_DIR}}"
     cmds:
       - echo "- End-to-end tests..."
@@ -284,3 +276,11 @@ tasks:
     cmds:
       - "{{.DOCKER_COMPOSE_CMD}} rm -fsv {{.SERVICE}}"
       - "{{.DOCKER_COMPOSE_CMD}} up -d {{.SERVICE}}"
+
+  kc:export:
+    cmds:
+      # https://www.keycloak.org/server/importExport
+      - echo "Dump Keycloak Bank realm..."
+      - docker exec -it keycloak /opt/keycloak/bin/kc.sh export --realm Bank --users realm_file --file /tmp/realm.json
+      - docker cp keycloak:/tmp/realm.json {{.KEYCLOAK_REALM_PATH}}
+      - echo "Exported in {{.KEYCLOAK_REALM_PATH}}"

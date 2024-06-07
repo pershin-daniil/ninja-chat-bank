@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/pershin-daniil/ninja-chat-bank/internal/server-client/errhandler"
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/server/errhandler"
 )
 
 func TestResponseBuilder(t *testing.T) {
