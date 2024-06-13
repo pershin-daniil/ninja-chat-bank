@@ -5,11 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/pershin-daniil/ninja-chat-bank/internal/buildinfo"
 	"net/http"
 	"strconv"
 
 	"github.com/go-resty/resty/v2"
+
+	"github.com/pershin-daniil/ninja-chat-bank/internal/buildinfo"
 )
 
 type IntrospectTokenResult struct {
