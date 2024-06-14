@@ -6,6 +6,8 @@ info:
 servers:
   - url: ws://localhost:8080/ws
     description: Development server
+  - url: /ws
+    description: E2E server
 
 components:
   schemas:

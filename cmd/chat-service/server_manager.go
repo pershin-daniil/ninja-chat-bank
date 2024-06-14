@@ -10,8 +10,9 @@ import (
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server"
 	servermanager "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager"
 	managererrhandler "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/errhandler"
+	managerevents "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/events"
 	managerv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/v1"
-	errhandler2 "github.com/pershin-daniil/ninja-chat-bank/internal/server/errhandler"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/server/errhandler"
 	eventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream"
 	managerload "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-load"
 	managerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool"
@@ -66,7 +67,7 @@ func initServerManager(
 	wsHandler, err := websocketstream.NewHTTPHandler(websocketstream.NewOptions(
 		lg,
 		eventStream,
-		dummyAdapter{},
+		managerevents.Adapter{},
 		websocketstream.JSONEventWriter{},
 		websocketstream.NewUpgrader(allowOrigins, secWsProtocol),
 		shutdownCh,
@@ -75,7 +76,7 @@ func initServerManager(
 		return nil, fmt.Errorf("create ws handler: %v", err)
 	}
 
-	httpErrorHandler, err := errhandler2.New(errhandler2.NewOptions(lg, productionMode, managererrhandler.ResponseBuilder))
+	httpErrorHandler, err := errhandler.New(errhandler.NewOptions(lg, productionMode, managererrhandler.ResponseBuilder))
 	if err != nil {
 		return nil, fmt.Errorf("create http error handler: %v", err)
 	}
@@ -96,10 +97,4 @@ func initServerManager(
 	}
 
 	return srv, nil
-}
-
-type dummyAdapter struct{}
-
-func (dummyAdapter) Adapt(event eventstream.Event) (any, error) {
-	return event, nil
 }

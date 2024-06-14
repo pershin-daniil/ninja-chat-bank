@@ -1,0 +1,130 @@
+openapi: 3.1.0
+info:
+  title: Bank Support Chat Manager Events
+  version: v1
+
+servers:
+  - url: ws://localhost:8080/ws
+    description: Development server
+  - url: /ws
+    description: E2E server
+
+paths:
+  /stub:
+    get:
+      description: It uses for generating events. Otherwise it doesn't.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+
+components:
+  schemas:
+    Event:
+      oneOf:
+        - $ref: "#/components/schemas/NewChatEvent"
+        - $ref: "#/components/schemas/ChatClosedEvent"
+        - $ref: "#/components/schemas/NewMessageEvent"
+      discriminator:
+        propertyName: eventType
+
+    NewChatEvent:
+      required: [ eventId, eventType, chatId, clientId, requestId, canTakeMoreProblems ]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/EventID"
+        eventType:
+          type: string
+        chatId:
+          $ref: "#/components/schemas/ChatID"
+        clientId:
+          $ref: "#/components/schemas/ClientID"
+        requestId:
+          $ref: "#/components/schemas/RequestID"
+        canTakeMoreProblems:
+          type: boolean
+
+    ChatClosedEvent:
+      required: [ chatId, eventId, eventType, requestId, canTakeMoreProblems ]
+      properties:
+        chatId:
+          $ref: "#/components/schemas/ChatID"
+        eventId:
+          $ref: "#/components/schemas/EventID"
+        eventType:
+          type: string
+        requestId:
+          $ref: "#/components/schemas/RequestID"
+        canTakeMoreProblems:
+          type: boolean
+
+    NewMessageEvent:
+      required: [ authorId, body, createdAt, chatId, eventId, eventType, messageId, requestId ]
+      properties:
+        authorId:
+          $ref: "#/components/schemas/ClientID"
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        chatId:
+          $ref: "#/components/schemas/ChatID"
+        eventId:
+          $ref: "#/components/schemas/EventID"
+        eventType:
+          type: string
+        messageId:
+          $ref: "#/components/schemas/MessageID"
+        requestId:
+          $ref: "#/components/schemas/RequestID"
+
+    EventType:
+      type: string
+      enum:
+        - NewChatEvent
+        - ChatClosedEvent
+        - NewMessageEvent
+
+    EventID:
+      type: string
+      format: uuid
+      x-go-type: types.EventID
+      x-go-name: ID
+      x-go-type-import:
+        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+
+    ClientID:
+      type: string
+      format: uuid
+      x-go-type: types.UserID
+      x-go-name: ClientID
+      x-go-type-import:
+        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+
+    ChatID:
+      type: string
+      format: uuid
+      x-go-type: types.ChatID
+      x-go-name: ChatID
+      x-go-type-import:
+        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+
+    RequestID:
+      type: string
+      format: uuid
+      x-go-type: types.RequestID
+      x-go-name: RequestID
+      x-go-type-import:
+        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+
+    MessageID:
+      type: string
+      format: uuid
+      x-go-type: types.MessageID
+      x-go-name: MessageID
+      x-go-type-import:
+        path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"

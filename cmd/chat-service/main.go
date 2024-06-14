@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	managerevents "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/events"
 	"log"
 	"os/signal"
 	"syscall"
@@ -28,10 +29,12 @@ import (
 	inmemeventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream/in-mem"
 	managerload "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-load"
 	inmemmanagerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool/in-mem"
+	managerscheduler "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-scheduler"
 	msgproducer "github.com/pershin-daniil/ninja-chat-bank/internal/services/msg-producer"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
 	clientmessageblockedjob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/client-message-blocked"
 	clientmessagesentjob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/client-message-sent"
+	managerassignedtoproblemjob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/manager-assigned-to-problem"
 	sendclientmessagejob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/send-client-message"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
 )
@@ -178,6 +181,19 @@ func run() (errReturned error) {
 		return fmt.Errorf("create manager load service: %v", err)
 	}
 
+	managerScheduler, err := managerscheduler.New(managerscheduler.NewOptions(
+		cfg.Services.ManagerScheduler.Period,
+		managerPool,
+		msgRepo,
+		outBox,
+		problemsRepo,
+		db,
+		lg,
+	))
+	if err != nil {
+		return fmt.Errorf("create manager scheduler: %v", err)
+	}
+
 	// Application Services.
 	afcVerdictProcessor, err := afcverdictsprocessor.New(afcverdictsprocessor.NewOptions(
 		cfg.Services.AFCVerdictsProcessor.Brokers,
@@ -204,6 +220,7 @@ func run() (errReturned error) {
 		clientmessageblockedjob.Must(clientmessageblockedjob.NewOptions(eventStream, msgRepo)),
 		clientmessagesentjob.Must(clientmessagesentjob.NewOptions(eventStream, msgRepo)),
 		sendclientmessagejob.Must(sendclientmessagejob.NewOptions(eventStream, msgProducer, msgRepo)),
+		managerassignedtoproblemjob.Must(managerassignedtoproblemjob.NewOptions(msgRepo, problemsRepo, managerLoad, eventStream)),
 	} {
 		outBox.MustRegisterJob(j)
 	}
@@ -261,11 +278,17 @@ func run() (errReturned error) {
 		return fmt.Errorf("get client events swagger: %v", err)
 	}
 
+	managerEventsSwagger, err := managerevents.GetSwagger()
+	if err != nil {
+		return fmt.Errorf("get manager events swagger: %v", err)
+	}
+
 	srvDebug, err := serverdebug.New(serverdebug.NewOptions(
 		cfg.Servers.Debug.Addr,
 		clientV1Swagger,
 		managerV1Swagger,
 		clientEventsSwagger,
+		managerEventsSwagger,
 	))
 	if err != nil {
 		return fmt.Errorf("init debug server: %v", err)
@@ -281,6 +304,7 @@ func run() (errReturned error) {
 	// Run services.
 	eg.Go(func() error { return outBox.Run(ctx) })
 	eg.Go(func() error { return afcVerdictProcessor.Run(ctx) })
+	eg.Go(func() error { return managerScheduler.Run(ctx) })
 
 	if err = eg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("wait app stop: %v", err)

@@ -6,8 +6,11 @@ import (
 	"fmt"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/store/chat"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/message"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/store/problem"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
+	"github.com/pershin-daniil/ninja-chat-bank/pkg/pointer"
 )
 
 var ErrMsgNotFound = errors.New("message not found")
@@ -65,4 +68,42 @@ func (r *Repo) CreateClientVisible(
 	m := adaptStoreMessage(msg)
 
 	return &m, nil
+}
+
+func (r *Repo) GetInitialMessageByProblemID(ctx context.Context, problemID types.ProblemID) (*Message, error) {
+	msg, err := r.db.Message(ctx).
+		Query().
+		Where(
+			message.HasChatWith(chat.HasProblemsWith(problem.ID(problemID))),
+			message.IsVisibleForManager(true),
+		).
+		First(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("find message: %v", err)
+	}
+
+	return pointer.Ptr(adaptStoreMessage(msg)), nil
+}
+
+func (r *Repo) CreateServiceClientVisible(
+	ctx context.Context,
+	reqID types.RequestID,
+	problemID types.ProblemID,
+	chatID types.ChatID,
+	msgBody string,
+) (*Message, error) {
+	msg, err := r.db.Message(ctx).
+		Create().
+		SetInitialRequestID(reqID).
+		SetProblemID(problemID).
+		SetChatID(chatID).
+		SetBody(msgBody).
+		SetIsVisibleForClient(true).
+		SetIsVisibleForManager(false).
+		SetIsService(true).
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create message: %v", err)
+	}
+	return pointer.Ptr(adaptStoreMessage(msg)), nil
 }

@@ -28,9 +28,10 @@ const (
 type Options struct {
 	addr string `option:"mandatory" validate:"required,hostname_port"`
 
-	v1ClientSwagger  *openapi3.T `option:"mandatory" validate:"required"`
-	v1ManagerSwagger *openapi3.T `option:"mandatory" validate:"required"`
-	eventsSwagger    *openapi3.T `option:"mandatory" validate:"required"`
+	v1ClientSwagger      *openapi3.T `option:"mandatory" validate:"required"`
+	v1ManagerSwagger     *openapi3.T `option:"mandatory" validate:"required"`
+	clientEventsSwagger  *openapi3.T `option:"mandatory" validate:"required"`
+	managerEventsSwagger *openapi3.T `option:"mandatory" validate:"required"`
 }
 
 type Server struct {
@@ -98,8 +99,11 @@ func New(opts Options) (*Server, error) {
 		e.GET("/schema/manager", s.exposeSchema(opts.v1ManagerSwagger))
 		index.addPage("/schema/manager", "Get manager OpenAPI specification")
 
-		e.GET("schema/events", s.exposeSchema(opts.eventsSwagger))
-		index.addPage("/schema/events", "Get events OpenAPI specification")
+		e.GET("schema/events", s.exposeSchema(opts.clientEventsSwagger))
+		index.addPage("/schema/events", "Get client events OpenAPI specification")
+
+		e.GET("schema/events", s.exposeSchema(opts.managerEventsSwagger))
+		index.addPage("/schema/events", "Get manager events OpenAPI specification")
 	}
 
 	e.GET("/", index.handler)
