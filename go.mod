@@ -6,6 +6,7 @@ require (
 	entgo.io/ent v0.13.1
 	github.com/BurntSushi/toml v1.3.2
 	github.com/brianvoe/gofakeit/v7 v7.0.3
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/getkin/kin-openapi v0.124.0
 	github.com/getsentry/sentry-go v0.27.0
 	github.com/go-playground/validator/v10 v10.20.0

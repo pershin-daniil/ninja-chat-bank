@@ -2,16 +2,50 @@ package afcverdictsprocessor
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/segmentio/kafka-go"
+	"go.uber.org/multierr"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/logger"
 )
 
-//go:generate mockgen -source=$GOFILE -destination=mocks/dlq_writer_mock.gen.go -package=afcverdictsprocessormocks
+type erroredMessage struct {
+	msg     kafka.Message
+	lastErr error
+}
 
-const serviceName = "afc-verdicts-processor"
+func (s *Service) startDLQProducer(ctx context.Context) (errReturned error) {
+	defer multierr.AppendInvoke(&errReturned, multierr.Close(s.dlqWriter))
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+
+		case m, ok := <-s.dlq:
+			if !ok {
+				return errors.New("dlq: channel was closed")
+			}
+
+			msg := kafka.Message{
+				Partition: 0,
+				Key:       m.msg.Key,
+				Value:     m.msg.Value,
+				Headers: append(m.msg.Headers,
+					kafka.Header{Key: "LAST_ERROR", Value: []byte(m.lastErr.Error())},
+					kafka.Header{Key: "ORIGINAL_PARTITION", Value: []byte(strconv.Itoa(m.msg.Partition))},
+				),
+			}
+			if err := s.dlqWriter.WriteMessages(ctx, msg); err != nil {
+				return fmt.Errorf("dql: write msg: %v", err)
+			}
+		}
+	}
+}
 
 //go:generate mockgen -source=$GOFILE -destination=mocks/dlq_writer_mock.gen.go -package=afcverdictsprocessormocks
 
@@ -24,9 +58,10 @@ func NewKafkaDLQWriter(brokers []string, topic string) KafkaDLQWriter {
 	return &kafka.Writer{
 		Addr:         kafka.TCP(brokers...),
 		Topic:        topic,
+		BatchSize:    1,
 		RequiredAcks: kafka.RequireOne,
 		Async:        false,
-		Logger:       logger.NewKafkaAdapted().WithServiceName(serviceName),
-		ErrorLogger:  logger.NewKafkaAdapted().WithServiceName(serviceName).ForErrors(),
+		Logger:       logger.NewKafkaAdapted().WithServiceName(dlqSubServiceName),
+		ErrorLogger:  logger.NewKafkaAdapted().WithServiceName(dlqSubServiceName).ForErrors(),
 	}
 }
