@@ -44,6 +44,9 @@ github.com/apparentlymart/go-textseg/v15/textseg
 github.com/brianvoe/gofakeit/v7
 github.com/brianvoe/gofakeit/v7/data
 github.com/brianvoe/gofakeit/v7/source
+# github.com/cenkalti/backoff v2.2.1+incompatible
+## explicit
+github.com/cenkalti/backoff
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
