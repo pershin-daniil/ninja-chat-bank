@@ -13,7 +13,8 @@ type OptOptionsSetter func(o *Options)
 func NewOptions(
 	canReceiveProblemsUseCase canReceiveProblemsUseCase,
 	freeHandsSignal freeHandsSignalUseCase,
-	getChatsUC getChatsUseCase,
+	getChatsUseCase getChatsUseCase,
+	getChatHistoryUseCase getChatHistoryUseCase,
 	options ...OptOptionsSetter,
 ) Options {
 	o := Options{}
@@ -22,7 +23,8 @@ func NewOptions(
 
 	o.canReceiveProblemsUseCase = canReceiveProblemsUseCase
 	o.freeHandsSignal = freeHandsSignal
-	o.getChatsUC = getChatsUC
+	o.getChatsUseCase = getChatsUseCase
+	o.getChatHistoryUseCase = getChatHistoryUseCase
 
 	for _, opt := range options {
 		opt(&o)
@@ -34,7 +36,8 @@ func (o *Options) Validate() error {
 	errs := new(errors461e464ebed9.ValidationErrors)
 	errs.Add(errors461e464ebed9.NewValidationError("canReceiveProblemsUseCase", _validate_Options_canReceiveProblemsUseCase(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("freeHandsSignal", _validate_Options_freeHandsSignal(o)))
-	errs.Add(errors461e464ebed9.NewValidationError("getChatsUC", _validate_Options_getChatsUC(o)))
+	errs.Add(errors461e464ebed9.NewValidationError("getChatsUseCase", _validate_Options_getChatsUseCase(o)))
+	errs.Add(errors461e464ebed9.NewValidationError("getChatHistoryUseCase", _validate_Options_getChatHistoryUseCase(o)))
 	return errs.AsError()
 }
 
@@ -52,9 +55,16 @@ func _validate_Options_freeHandsSignal(o *Options) error {
 	return nil
 }
 
-func _validate_Options_getChatsUC(o *Options) error {
-	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.getChatsUC, "required"); err != nil {
-		return fmt461e464ebed9.Errorf("field `getChatsUC` did not pass the test: %w", err)
+func _validate_Options_getChatsUseCase(o *Options) error {
+	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.getChatsUseCase, "required"); err != nil {
+		return fmt461e464ebed9.Errorf("field `getChatsUseCase` did not pass the test: %w", err)
+	}
+	return nil
+}
+
+func _validate_Options_getChatHistoryUseCase(o *Options) error {
+	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.getChatHistoryUseCase, "required"); err != nil {
+		return fmt461e464ebed9.Errorf("field `getChatHistoryUseCase` did not pass the test: %w", err)
 	}
 	return nil
 }

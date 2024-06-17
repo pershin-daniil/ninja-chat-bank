@@ -8,6 +8,8 @@ import (
 
 	keycloakclient "github.com/pershin-daniil/ninja-chat-bank/internal/clients/keycloak"
 	chatsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/chats"
+	messagesrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/messages"
+	problemsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/problems"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server"
 	servermanager "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager"
 	managererrhandler "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/errhandler"
@@ -19,6 +21,7 @@ import (
 	managerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool"
 	canreceiveproblems "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/can-receive-problems"
 	freehandssignal "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands-signal"
+	getchathistory "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chat-history"
 	getchats "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chats"
 	websocketstream "github.com/pershin-daniil/ninja-chat-bank/internal/websocket-stream"
 )
@@ -42,6 +45,8 @@ func initServerManager(
 	mPool managerpool.Pool,
 
 	chatsRepo *chatsrepo.Repo,
+	msgRepo *messagesrepo.Repo,
+	problemsRepo *problemsrepo.Repo,
 ) (*server.Server, error) {
 	canReceiveProblemsUseCase, err := canreceiveproblems.New(canreceiveproblems.NewOptions(mLoadSvc, mPool))
 	if err != nil {
@@ -58,10 +63,19 @@ func initServerManager(
 		return nil, fmt.Errorf("create getchats usecase: %v", err)
 	}
 
+	getChatHistoryUseCase, err := getchathistory.New(getchathistory.NewOptions(
+		msgRepo,
+		problemsRepo,
+	))
+	if err != nil {
+		return nil, fmt.Errorf("create getchats usecase: %v", err)
+	}
+
 	v1Handlers, err := managerv1.NewHandlers(managerv1.NewOptions(
 		canReceiveProblemsUseCase,
 		freeHandsSignalUseCase,
 		getChatsUseCase,
+		getChatHistoryUseCase,
 	))
 	if err != nil {
 		return nil, fmt.Errorf("create v1 handlers: %v", err)

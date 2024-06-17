@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/store/chat"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/problem"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
+	"github.com/pershin-daniil/ninja-chat-bank/pkg/pointer"
 )
 
 func (r *Repo) CreateIfNotExists(ctx context.Context, chatID types.ChatID) (types.ProblemID, error) {
@@ -37,4 +39,23 @@ func (r *Repo) GetManagerOpenProblemsCount(ctx context.Context, managerID types.
 	}
 
 	return count, nil
+}
+
+func (r *Repo) GetUnresolvedProblem(ctx context.Context, chatID types.ChatID, managerID types.UserID) (*Problem, error) {
+	p, err := r.db.Problem(ctx).
+		Query().
+		Where(
+			problem.HasChatWith(chat.ID(chatID)),
+			problem.ManagerID(managerID),
+			problem.ResolvedAtIsNil(),
+		).
+		First(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get problem: %v", err)
+	}
+	if nil == p {
+		return nil, ErrProblemNotFound
+	}
+
+	return pointer.Ptr(adaptStoreProblem(p)), nil
 }

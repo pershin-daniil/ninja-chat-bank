@@ -24,6 +24,7 @@ type HandlersSuite struct {
 	canReceiveProblemsUseCase *managerv1mocks.MockcanReceiveProblemsUseCase
 	freeHandsSignalUseCase    *managerv1mocks.MockfreeHandsSignalUseCase
 	getChatsUseCase           *managerv1mocks.MockgetChatsUseCase
+	getChatHistoryUseCase     *managerv1mocks.MockgetChatHistoryUseCase
 	handlers                  managerv1.Handlers
 
 	managerID types.UserID
@@ -39,12 +40,15 @@ func (s *HandlersSuite) SetupTest() {
 	s.canReceiveProblemsUseCase = managerv1mocks.NewMockcanReceiveProblemsUseCase(s.ctrl)
 	s.freeHandsSignalUseCase = managerv1mocks.NewMockfreeHandsSignalUseCase(s.ctrl)
 	s.getChatsUseCase = managerv1mocks.NewMockgetChatsUseCase(s.ctrl)
+	s.getChatsUseCase = managerv1mocks.NewMockgetChatsUseCase(s.ctrl)
+	s.getChatHistoryUseCase = managerv1mocks.NewMockgetChatHistoryUseCase(s.ctrl)
 	{
 		var err error
 		s.handlers, err = managerv1.NewHandlers(managerv1.NewOptions(
 			s.canReceiveProblemsUseCase,
 			s.freeHandsSignalUseCase,
 			s.getChatsUseCase,
+			s.getChatHistoryUseCase,
 		))
 		s.Require().NoError(err)
 	}
