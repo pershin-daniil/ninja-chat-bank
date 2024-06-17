@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/chat"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/store/problem"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 )
 
@@ -25,4 +26,21 @@ func (r *Repo) CreateIfNotExists(ctx context.Context, userID types.UserID) (type
 	}
 
 	return chatID, nil
+}
+
+func (r *Repo) GetOpenProblemChatsForManager(ctx context.Context, managerID types.UserID) ([]Chat, error) {
+	chats, err := r.db.Chat(ctx).Query().
+		Where(
+			chat.HasProblemsWith(
+				problem.ManagerID(managerID),
+				problem.ResolvedAtIsNil(),
+			),
+		).
+		Order(chat.ByCreatedAt(sql.OrderDesc())).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("query chats: %v", err)
+	}
+
+	return adaptStoreChats(chats), nil
 }

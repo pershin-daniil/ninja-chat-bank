@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	chatsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/chats"
+	getchats "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chats"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"go.uber.org/zap"
@@ -38,6 +40,8 @@ func initServerManager(
 	eventStream eventstream.EventStream,
 	mLoadSvc *managerload.Service,
 	mPool managerpool.Pool,
+
+	chatsRepo *chatsrepo.Repo,
 ) (*server.Server, error) {
 	canReceiveProblemsUseCase, err := canreceiveproblems.New(canreceiveproblems.NewOptions(mLoadSvc, mPool))
 	if err != nil {
@@ -49,9 +53,12 @@ func initServerManager(
 		return nil, fmt.Errorf("create freehandssignal usecase: %v", err)
 	}
 
+	getChatsUseCase, err := getchats.New(getchats.NewOptions(chatsRepo))
+
 	v1Handlers, err := managerv1.NewHandlers(managerv1.NewOptions(
 		canReceiveProblemsUseCase,
 		freeHandsSignalUseCase,
+		getChatsUseCase,
 	))
 	if err != nil {
 		return nil, fmt.Errorf("create v1 handlers: %v", err)

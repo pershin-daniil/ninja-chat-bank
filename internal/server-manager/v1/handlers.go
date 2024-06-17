@@ -3,6 +3,7 @@ package managerv1
 import (
 	"context"
 	"fmt"
+	getchats "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chats"
 
 	canreceiveproblems "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/can-receive-problems"
 	freehandssignal "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands-signal"
@@ -20,10 +21,15 @@ type freeHandsSignalUseCase interface {
 	Handle(ctx context.Context, req freehandssignal.Request) (freehandssignal.Response, error)
 }
 
+type getChatsUseCase interface {
+	Handle(ctx context.Context, req getchats.Request) (getchats.Response, error)
+}
+
 //go:generate options-gen -out-filename=handlers_options.gen.go -from-struct=Options
 type Options struct {
 	canReceiveProblemsUseCase canReceiveProblemsUseCase `option:"mandatory" validate:"required"`
 	freeHandsSignal           freeHandsSignalUseCase    `option:"mandatory" validate:"required"`
+	getChatsUC                getChatsUseCase           `option:"mandatory" validate:"required"`
 }
 
 type Handlers struct {

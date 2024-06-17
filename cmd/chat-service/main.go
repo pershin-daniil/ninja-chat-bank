@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	managerevents "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/events"
 	"log"
 	"os/signal"
 	"syscall"
@@ -24,6 +23,7 @@ import (
 	clientevents "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/events"
 	clientv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-client/v1"
 	serverdebug "github.com/pershin-daniil/ninja-chat-bank/internal/server-debug"
+	managerevents "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/events"
 	managerv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/v1"
 	afcverdictsprocessor "github.com/pershin-daniil/ninja-chat-bank/internal/services/afc-verdicts-processor"
 	inmemeventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream/in-mem"
@@ -268,6 +268,7 @@ func run() (errReturned error) {
 		eventStream,
 		managerLoad,
 		managerPool,
+		chatsRepo,
 	)
 	if err != nil {
 		return fmt.Errorf("init manager server: %v", err)

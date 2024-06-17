@@ -8,6 +8,19 @@ servers:
     description: Development server
 
 paths:
+  /getChats:
+    post:
+      description: Get the list of chats with open problems.
+      parameters:
+        - $ref: "#/components/parameters/XRequestIDHeader"
+      responses:
+        '200':
+          description: Chats list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChatsResponse"
+
   /getFreeHandsBtnAvailability:
     post:
       description: Check availability of "Free Hands" button.
@@ -59,6 +72,16 @@ components:
   schemas:
     # Common.
 
+    ChatId:
+      required: [ chatId ]
+      properties:
+        chatId:
+          type: string
+          format: uuid
+          x-go-type: types.ChatID
+          x-go-type-import:
+            path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+
     Error:
       required: [ message, code ]
       properties:
@@ -101,3 +124,33 @@ components:
           type: object
         error:
           $ref: "#/components/schemas/Error"
+
+
+    # /getChats
+
+    GetChatsResponse:
+      properties:
+        data:
+          $ref: "#/components/schemas/ChatList"
+        error:
+          $ref: "#/components/schemas/Error"
+
+    ChatList:
+      required: [ chats ]
+      properties:
+        chats:
+          type: array
+          items: { $ref: "#/components/schemas/Chat" }
+
+    Chat:
+      allOf:
+        - $ref: "#/components/schemas/ChatId"
+        - type: object
+          required: [ clientId ]
+          properties:
+            clientId:
+              type: string
+              format: uuid
+              x-go-type: types.UserID
+              x-go-type-import:
+                path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
