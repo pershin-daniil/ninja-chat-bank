@@ -19,10 +19,14 @@ import (
 	eventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream"
 	managerload "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-load"
 	managerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
 	canreceiveproblems "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/can-receive-problems"
+	closechat "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/close-chat"
 	freehandssignal "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands-signal"
 	getchathistory "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chat-history"
 	getchats "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chats"
+	sendmessage "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/send-message"
 	websocketstream "github.com/pershin-daniil/ninja-chat-bank/internal/websocket-stream"
 )
 
@@ -41,9 +45,11 @@ func initServerManager(
 	secWsProtocol string,
 
 	eventStream eventstream.EventStream,
+	outBox *outbox.Service,
 	mLoadSvc *managerload.Service,
 	mPool managerpool.Pool,
 
+	db *store.Database,
 	chatsRepo *chatsrepo.Repo,
 	msgRepo *messagesrepo.Repo,
 	problemsRepo *problemsrepo.Repo,
@@ -71,11 +77,25 @@ func initServerManager(
 		return nil, fmt.Errorf("create getchats usecase: %v", err)
 	}
 
+	sendMessageUseCase, err := sendmessage.New(sendmessage.NewOptions(msgRepo, outBox, problemsRepo, db))
+	if err != nil {
+		return nil, fmt.Errorf("create send message usecase: %v", err)
+	}
+
+	closeChatUseCase, err := closechat.New(
+		closechat.NewOptions(problemsRepo, msgRepo, chatsRepo, outBox, db),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create close chat usecase: %v", err)
+	}
+
 	v1Handlers, err := managerv1.NewHandlers(managerv1.NewOptions(
 		canReceiveProblemsUseCase,
 		freeHandsSignalUseCase,
 		getChatsUseCase,
 		getChatHistoryUseCase,
+		sendMessageUseCase,
+		closeChatUseCase,
 	))
 	if err != nil {
 		return nil, fmt.Errorf("create v1 handlers: %v", err)

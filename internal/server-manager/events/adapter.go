@@ -25,6 +25,14 @@ func (Adapter) Adapt(ev eventstream.Event) (any, error) {
 			RequestID:           t.RequestID,
 			CanTakeMoreProblems: t.CanTakeMoreProblems,
 		}, nil
+	case *eventstream.ChatClosedEvent:
+		return ChatClosedEvent{
+			ID:                  t.ID,
+			ChatID:              t.ChatID,
+			EventType:           string(EventTypeChatClosedEvent),
+			RequestID:           t.RequestID,
+			CanTakeMoreProblems: t.CanTakeMoreProblems,
+		}, nil
 	case *eventstream.NewMessageEvent:
 		return NewMessageEvent{
 			ClientID:  t.AuthorID,

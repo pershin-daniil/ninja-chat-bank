@@ -5,9 +5,11 @@ import (
 	"fmt"
 
 	canreceiveproblems "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/can-receive-problems"
+	closechat "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/close-chat"
 	freehandssignal "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands-signal"
 	getchathistory "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chat-history"
 	getchats "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chats"
+	sendmessage "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/send-message"
 )
 
 var _ ServerInterface = (*Handlers)(nil)
@@ -29,12 +31,22 @@ type getChatHistoryUseCase interface {
 	Handle(ctx context.Context, req getchathistory.Request) (getchathistory.Response, error)
 }
 
+type closeChatUseCase interface {
+	Handle(ctx context.Context, req closechat.Request) error
+}
+
+type sendMessageUseCase interface {
+	Handle(ctx context.Context, req sendmessage.Request) (sendmessage.Response, error)
+}
+
 //go:generate options-gen -out-filename=handlers_options.gen.go -from-struct=Options
 type Options struct {
 	canReceiveProblemsUseCase canReceiveProblemsUseCase `option:"mandatory" validate:"required"`
 	freeHandsSignal           freeHandsSignalUseCase    `option:"mandatory" validate:"required"`
 	getChatsUseCase           getChatsUseCase           `option:"mandatory" validate:"required"`
 	getChatHistoryUseCase     getChatHistoryUseCase     `option:"mandatory" validate:"required"`
+	sendMessageUseCase        sendMessageUseCase        `option:"mandatory" validate:"required"`
+	closeChatUseCase          closeChatUseCase          `option:"mandatory" validate:"required"`
 }
 
 type Handlers struct {

@@ -7,7 +7,7 @@ import (
 	"github.com/pershin-daniil/ninja-chat-bank/internal/validator"
 )
 
-//go:generate gonstructor --output=events.gen.go --type=NewMessageEvent --type=MessageSentEvent --type=MessageBlockedEvent --type=NewChatEvent
+//go:generate gonstructor --output=events.gen.go --type=NewMessageEvent --type=MessageSentEvent --type=MessageBlockedEvent --type=NewChatEvent --type=ChatClosedEvent
 
 type Event interface {
 	eventMarker()
@@ -64,3 +64,13 @@ type NewChatEvent struct {
 }
 
 func (e NewChatEvent) Validate() error { return validator.Validator.Struct(e) }
+
+type ChatClosedEvent struct {
+	event               `gonstructor:"-"`
+	ID                  types.EventID   `validate:"required"`
+	ChatID              types.ChatID    `validate:"required"`
+	RequestID           types.RequestID `validate:"required"`
+	CanTakeMoreProblems bool
+}
+
+func (e ChatClosedEvent) Validate() error { return validator.Validator.Struct(e) }

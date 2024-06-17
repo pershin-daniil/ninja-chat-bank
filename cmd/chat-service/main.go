@@ -34,8 +34,10 @@ import (
 	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox"
 	clientmessageblockedjob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/client-message-blocked"
 	clientmessagesentjob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/client-message-sent"
+	closechatjob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/close-chat"
 	managerassignedtoproblemjob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/manager-assigned-to-problem"
 	sendclientmessagejob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/send-client-message"
+	sendmanagermessagejob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/send-manager-message"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
 )
 
@@ -221,7 +223,19 @@ func run() (errReturned error) {
 		clientmessageblockedjob.Must(clientmessageblockedjob.NewOptions(eventStream, msgRepo)),
 		clientmessagesentjob.Must(clientmessagesentjob.NewOptions(eventStream, msgRepo)),
 		sendclientmessagejob.Must(sendclientmessagejob.NewOptions(eventStream, msgProducer, msgRepo)),
-		managerassignedtoproblemjob.Must(managerassignedtoproblemjob.NewOptions(msgRepo, problemsRepo, managerLoad, eventStream)),
+		managerassignedtoproblemjob.Must(managerassignedtoproblemjob.NewOptions(
+			msgRepo,
+			problemsRepo,
+			managerLoad,
+			eventStream,
+		)),
+		sendmanagermessagejob.Must(sendmanagermessagejob.NewOptions(
+			msgProducer,
+			msgRepo,
+			chatsRepo,
+			eventStream,
+		)),
+		closechatjob.Must(closechatjob.NewOptions(problemsRepo, msgRepo, eventStream)),
 	} {
 		outBox.MustRegisterJob(j)
 	}
@@ -267,8 +281,10 @@ func run() (errReturned error) {
 		cfg.Servers.Manager.RequiredAccess.Role,
 		cfg.Servers.Manager.SecWsProtocol,
 		eventStream,
+		outBox,
 		managerLoad,
 		managerPool,
+		db,
 		chatsRepo,
 		msgRepo,
 		problemsRepo,

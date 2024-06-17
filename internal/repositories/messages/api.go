@@ -107,3 +107,29 @@ func (r *Repo) CreateServiceClientVisible(
 	}
 	return pointer.Ptr(adaptStoreMessage(msg)), nil
 }
+
+func (r *Repo) CreateFullVisible(
+	ctx context.Context,
+	reqID types.RequestID,
+	problemID types.ProblemID,
+	chatID types.ChatID,
+	authorID types.UserID,
+	msgBody string,
+) (*Message, error) {
+	msg, err := r.db.Message(ctx).
+		Create().
+		SetID(types.NewMessageID()).
+		SetChatID(chatID).
+		SetProblemID(problemID).
+		SetInitialRequestID(reqID).
+		SetAuthorID(authorID).
+		SetBody(msgBody).
+		SetIsVisibleForClient(true).
+		SetIsVisibleForManager(true).
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create message: %v", err)
+	}
+
+	return pointer.Ptr(adaptStoreMessage(msg)), nil
+}
