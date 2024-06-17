@@ -70,7 +70,7 @@ func (s *Stream) Run(ctx context.Context) (errReturned error) {
 
 		select {
 		case <-ctx.Done():
-			return nil
+			return ctx.Err()
 		case s.eventSignals <- struct{}{}:
 		}
 	}

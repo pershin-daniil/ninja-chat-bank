@@ -79,6 +79,12 @@ vars:
 
   E2E_CLIENT_EVENTS_DST: ./tests/e2e/api/client/events/events.gen.go
   E2E_CLIENT_EVENTS_PKG: apiclientevents
+
+  E2E_MANAGER_V1_DST: ./tests/e2e/api/manager/v1/client.gen.go
+  E2E_MANAGER_V1_PKG: apimanagerv1
+
+  E2E_MANAGER_EVENTS_DST: ./tests/e2e/api/manager/events/events.gen.go
+  E2E_MANAGER_EVENTS_PKG: apimanagerevents
   ###
 
 tasks:
@@ -238,6 +244,11 @@ tasks:
       - ./oapi-codegen --old-config-style -generate types,client -package {{.E2E_CLIENT_V1_PKG}} ../../{{.CLIENT_V1_SRC}} > ../../{{.E2E_CLIENT_V1_DST}}
       - echo "[E2E] Generate client events..."
       - ./oapi-codegen --old-config-style -generate skip-prune,types -package {{.E2E_CLIENT_EVENTS_PKG}} ../../{{.CLIENT_EVENTS_SRC}} > ../../{{.E2E_CLIENT_EVENTS_DST}}
+
+      - echo "[E2E] Generate manager API..."
+      - ./oapi-codegen --old-config-style -generate types,client -package {{.E2E_MANAGER_V1_PKG}} ../../{{.MANAGER_V1_SRC}} > ../../{{.E2E_MANAGER_V1_DST}}
+      - echo "[E2E] Generate client events..."
+      - ./oapi-codegen --old-config-style -generate skip-prune,types -package {{.E2E_MANAGER_EVENTS_PKG}} ../../{{.MANAGER_EVENTS_SRC}} > ../../{{.E2E_MANAGER_EVENTS_DST}}
       - task: tidy
 
 
