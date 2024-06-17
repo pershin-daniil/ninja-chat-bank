@@ -110,7 +110,7 @@ tasks:
     - |
       export PATH="${PATH}:{{.TOOLS_DIR}}"
       gofumpt -w {{.GO_FILES}}
-      gci write {{.GO_FILES}} --custom-order -s standard -s default -s "Prefix({{.GO_MODULE}})" 2> /dev/null
+      gci write {{.GO_FILES}} --custom-order -s standard -s default -s "prefix({{.GO_MODULE}})" 2> /dev/null
 
   lint:
     cmds:
