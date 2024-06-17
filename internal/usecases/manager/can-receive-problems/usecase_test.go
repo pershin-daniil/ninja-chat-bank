@@ -33,7 +33,7 @@ func (s *UseCaseSuite) SetupTest() {
 	s.mPoolMock = canreceiveproblemsmocks.NewMockmanagerPool(s.ctrl)
 
 	var err error
-	s.uCase, err = canreceiveproblems.New(canreceiveproblems.NewOptions(s.mPoolMock, s.mLoadMock))
+	s.uCase, err = canreceiveproblems.New(canreceiveproblems.NewOptions(s.mLoadMock, s.mPoolMock))
 	s.Require().NoError(err)
 
 	s.ContextSuite.SetupTest()

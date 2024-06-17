@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
@@ -23,6 +24,34 @@ const (
 	BearerAuthScopes = "bearerAuth.Scopes"
 )
 
+// Defines values for ErrorCode.
+const (
+	ErrorCodeManagerOverloaded     ErrorCode = 5000
+	ErrorCodeNoActiveProblemInChat ErrorCode = 5001
+)
+
+// Chat defines model for Chat.
+type Chat struct {
+	ChatId   types.ChatID `json:"chatId"`
+	ClientId types.UserID `json:"clientId"`
+}
+
+// ChatId defines model for ChatId.
+type ChatId struct {
+	ChatId types.ChatID `json:"chatId"`
+}
+
+// ChatList defines model for ChatList.
+type ChatList struct {
+	Chats []Chat `json:"chats"`
+}
+
+// CloseChatRequest defines model for CloseChatRequest.
+type CloseChatRequest = ChatId
+
+// CloseChatResponse defines model for CloseChatResponse.
+type CloseChatResponse = NullDataResponse
+
 // Error defines model for Error.
 type Error struct {
 	// Code contains HTTP error codes and specific business logic error codes (the last must be >= 1000).
@@ -32,7 +61,12 @@ type Error struct {
 }
 
 // ErrorCode contains HTTP error codes and specific business logic error codes (the last must be >= 1000).
-type ErrorCode = int
+type ErrorCode int
+
+// FreeHandsBtnAvailability defines model for FreeHandsBtnAvailability.
+type FreeHandsBtnAvailability struct {
+	Available bool `json:"available"`
+}
 
 // FreeHandsResponse defines model for FreeHandsResponse.
 type FreeHandsResponse struct {
@@ -40,17 +74,91 @@ type FreeHandsResponse struct {
 	Error *Error                  `json:"error,omitempty"`
 }
 
+// GetChatHistoryRequest defines model for GetChatHistoryRequest.
+type GetChatHistoryRequest struct {
+	ChatId   types.ChatID `json:"chatId"`
+	Cursor   *string      `json:"cursor,omitempty"`
+	PageSize *int         `json:"pageSize,omitempty"`
+}
+
+// GetChatHistoryResponse defines model for GetChatHistoryResponse.
+type GetChatHistoryResponse struct {
+	Data  *MessagesPage `json:"data,omitempty"`
+	Error *Error        `json:"error,omitempty"`
+}
+
+// GetChatsResponse defines model for GetChatsResponse.
+type GetChatsResponse struct {
+	Data  *ChatList `json:"data,omitempty"`
+	Error *Error    `json:"error,omitempty"`
+}
+
 // GetFreeHandsBtnAvailabilityResponse defines model for GetFreeHandsBtnAvailabilityResponse.
 type GetFreeHandsBtnAvailabilityResponse struct {
-	Data  map[string]interface{} `json:"data"`
-	Error *Error                 `json:"error,omitempty"`
+	Data  *FreeHandsBtnAvailability `json:"data,omitempty"`
+	Error *Error                    `json:"error,omitempty"`
+}
+
+// Message defines model for Message.
+type Message struct {
+	AuthorId   types.UserID    `json:"authorId"`
+	Body       string          `json:"body"`
+	CreatedAt  time.Time       `json:"createdAt"`
+	Id         types.MessageID `json:"id"`
+	IsReceived bool            `json:"isReceived"`
+}
+
+// MessageWithoutBody defines model for MessageWithoutBody.
+type MessageWithoutBody struct {
+	AuthorId  types.UserID    `json:"authorId"`
+	CreatedAt time.Time       `json:"createdAt"`
+	Id        types.MessageID `json:"id"`
+}
+
+// MessagesPage defines model for MessagesPage.
+type MessagesPage struct {
+	Messages []Message `json:"messages"`
+	Next     string    `json:"next"`
+}
+
+// NullDataResponse defines model for NullDataResponse.
+type NullDataResponse struct {
+	Data  *interface{} `json:"data,omitempty"`
+	Error *Error       `json:"error,omitempty"`
+}
+
+// SendMessageRequest defines model for SendMessageRequest.
+type SendMessageRequest struct {
+	ChatId      types.ChatID `json:"chatId"`
+	MessageBody string       `json:"messageBody"`
+}
+
+// SendMessageResponse defines model for SendMessageResponse.
+type SendMessageResponse struct {
+	Data  *MessageWithoutBody `json:"data,omitempty"`
+	Error *Error              `json:"error,omitempty"`
 }
 
 // XRequestIDHeader defines model for XRequestIDHeader.
 type XRequestIDHeader = types.RequestID
 
+// PostCloseChatParams defines parameters for PostCloseChat.
+type PostCloseChatParams struct {
+	XRequestID XRequestIDHeader `json:"X-Request-ID"`
+}
+
 // PostFreeHandsParams defines parameters for PostFreeHands.
 type PostFreeHandsParams struct {
+	XRequestID XRequestIDHeader `json:"X-Request-ID"`
+}
+
+// PostGetChatHistoryParams defines parameters for PostGetChatHistory.
+type PostGetChatHistoryParams struct {
+	XRequestID XRequestIDHeader `json:"X-Request-ID"`
+}
+
+// PostGetChatsParams defines parameters for PostGetChats.
+type PostGetChatsParams struct {
 	XRequestID XRequestIDHeader `json:"X-Request-ID"`
 }
 
@@ -59,19 +167,78 @@ type PostGetFreeHandsBtnAvailabilityParams struct {
 	XRequestID XRequestIDHeader `json:"X-Request-ID"`
 }
 
+// PostSendMessageParams defines parameters for PostSendMessage.
+type PostSendMessageParams struct {
+	XRequestID XRequestIDHeader `json:"X-Request-ID"`
+}
+
+// PostCloseChatJSONRequestBody defines body for PostCloseChat for application/json ContentType.
+type PostCloseChatJSONRequestBody = CloseChatRequest
+
+// PostGetChatHistoryJSONRequestBody defines body for PostGetChatHistory for application/json ContentType.
+type PostGetChatHistoryJSONRequestBody = GetChatHistoryRequest
+
+// PostSendMessageJSONRequestBody defines body for PostSendMessage for application/json ContentType.
+type PostSendMessageJSONRequestBody = SendMessageRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+
+	// (POST /closeChat)
+	PostCloseChat(ctx echo.Context, params PostCloseChatParams) error
 
 	// (POST /freeHands)
 	PostFreeHands(ctx echo.Context, params PostFreeHandsParams) error
 
+	// (POST /getChatHistory)
+	PostGetChatHistory(ctx echo.Context, params PostGetChatHistoryParams) error
+
+	// (POST /getChats)
+	PostGetChats(ctx echo.Context, params PostGetChatsParams) error
+
 	// (POST /getFreeHandsBtnAvailability)
 	PostGetFreeHandsBtnAvailability(ctx echo.Context, params PostGetFreeHandsBtnAvailabilityParams) error
+
+	// (POST /sendMessage)
+	PostSendMessage(ctx echo.Context, params PostSendMessageParams) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler ServerInterface
+}
+
+// PostCloseChat converts echo context to params.
+func (w *ServerInterfaceWrapper) PostCloseChat(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(BearerAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PostCloseChatParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Request-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
+		var XRequestID XRequestIDHeader
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Request-ID, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Request-ID: %s", err))
+		}
+
+		params.XRequestID = XRequestID
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Request-ID is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.PostCloseChat(ctx, params)
+	return err
 }
 
 // PostFreeHands converts echo context to params.
@@ -104,6 +271,72 @@ func (w *ServerInterfaceWrapper) PostFreeHands(ctx echo.Context) error {
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.PostFreeHands(ctx, params)
+	return err
+}
+
+// PostGetChatHistory converts echo context to params.
+func (w *ServerInterfaceWrapper) PostGetChatHistory(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(BearerAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PostGetChatHistoryParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Request-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
+		var XRequestID XRequestIDHeader
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Request-ID, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Request-ID: %s", err))
+		}
+
+		params.XRequestID = XRequestID
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Request-ID is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.PostGetChatHistory(ctx, params)
+	return err
+}
+
+// PostGetChats converts echo context to params.
+func (w *ServerInterfaceWrapper) PostGetChats(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(BearerAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PostGetChatsParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Request-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
+		var XRequestID XRequestIDHeader
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Request-ID, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Request-ID: %s", err))
+		}
+
+		params.XRequestID = XRequestID
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Request-ID is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.PostGetChats(ctx, params)
 	return err
 }
 
@@ -140,6 +373,39 @@ func (w *ServerInterfaceWrapper) PostGetFreeHandsBtnAvailability(ctx echo.Contex
 	return err
 }
 
+// PostSendMessage converts echo context to params.
+func (w *ServerInterfaceWrapper) PostSendMessage(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(BearerAuthScopes, []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PostSendMessageParams
+
+	headers := ctx.Request().Header
+	// ------------- Required header parameter "X-Request-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
+		var XRequestID XRequestIDHeader
+		n := len(valueList)
+		if n != 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Expected one value for X-Request-ID, got %d", n))
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter X-Request-ID: %s", err))
+		}
+
+		params.XRequestID = XRequestID
+	} else {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Header parameter X-Request-ID is required, but not found"))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.PostSendMessage(ctx, params)
+	return err
+}
+
 // This is a simple interface which specifies echo.Route addition functions which
 // are present on both echo.Echo and echo.Group, since we want to allow using
 // either of them for path registration
@@ -168,27 +434,42 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 		Handler: si,
 	}
 
+	router.POST(baseURL+"/closeChat", wrapper.PostCloseChat)
 	router.POST(baseURL+"/freeHands", wrapper.PostFreeHands)
+	router.POST(baseURL+"/getChatHistory", wrapper.PostGetChatHistory)
+	router.POST(baseURL+"/getChats", wrapper.PostGetChats)
 	router.POST(baseURL+"/getFreeHandsBtnAvailability", wrapper.PostGetFreeHandsBtnAvailability)
+	router.POST(baseURL+"/sendMessage", wrapper.PostSendMessage)
 
 }
 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/8yUzW7jNhDHX4WY9tACsqU0PSwE9JDddJu0KBrsBugCqQ9jaixNLJFccug2CPTuBSk7",
-	"tuFk0972JIicz9/Mn4+g7eCsISMB6kdw6HEgIZ//Pn2gz5GCXF9eETbk0xkbqKGbfgswOBDU8Gm2tZxd",
-	"X0IBnj5H9tRALT5SAUF3NGDyXlk/oEANMXIDBciDS/5BPJsWCvhn1toZD856mcqRDmpoWbq4nGs7lI58",
-	"6NjMGjTMfWnY3ONMdyizJZp1yUbIG+zLFDjAuI24TZMP509NwTiOu+Jyvz97b3OTzltHXpjysbYNpe+3",
-	"nlZQwzflnlm59S6z67tkOBbQkCD32fe4wbGAgULAlp65Gw/B3T0ZFlP+xVjAPkn9CA0F7dkJ2zQRbY0g",
-	"m6Cubm9vFCVDlfyCQtOo4EjzirVaxsCGQlC9bVkf2X0nHakeg6ghBlFLUn/Fqjqnn9RZVVXfz6GAgQ0P",
-	"cYD6x6p6ml1C3pJPvb33RFdomvCBgrMm0CnLBgUPerfLe9KSfGnH/lXK09h+IXlK91bMxQa5xyX3LA+v",
-	"Z8em4QQO+5uD+7Ss/7eS45nl+Iu8VaSjZ3n4mOyn5EtCT/4ippXe/b3f6eHXP29hu4uJy3S7F0gn4qa+",
-	"2axsBsjSp5u3aNbqY3RJMupdh6J+R4MteXVxcw0FbMiHaUU2Z4mzdWTQMdRwPq/m51BkkeUCy9UOaCZn",
-	"g5zu2YBrUsM2QxCUGBQH5QmbB7WyXv1t/RpyGo/J57qBGm5s2E8rp9w/M3fPg96blCfP0LhI2Kch51p/",
-	"qKpJqEbI5KrRuZ51rqC8D6n0x4Nn6EuTPV3izP0Ywx+/pdOxgLJ9eQ9fpqg70mvFK5WIqy75qmUUsSbB",
-	"xClGT89y/MLif+Vk/4tkX2Z9IKrc2qGc7hap8EB+s2v8OMQlbai3biAjarKCAqLvt8qqy7K3GvvOBqnf",
-	"VG/OyqSVxfhvAAAA//8Ku/FbHgcAAA==",
+	"H4sIAAAAAAAC/9xYbW/bNhD+K8RtwDZAjuRlBQoD+5CXtsnQtEHToQVSf6Cls8WGIlXy5MYL/N8HUi+2",
+	"LDlO06ZI+80WX+7ueZ473ekGYp3lWqEiC6MbyLnhGRIa/+/9G/xUoKXT4xPkCRr3TCgYQVr+DUDxDGEE",
+	"7wfVzsHpMQRg8FMhDCYwIlNgADZOMePu9FSbjBOMoChEAgHQInfnLRmhZhDA9WCmByLLtaHSHUphBDNB",
+	"aTHZi3UW5mhsKtQg4UoIGSqhPvJBnHIaTLi6CoUiNIrL0F1sYVndWJnxD/eaoGC5XNbO+XiPUu7Ncilf",
+	"T2F0eQO/GpzCCH4JVzCF1YHQ7T5NYBncQG50joYE+mtiKVC5pbsG3HLvX4vGo9gsfUtAXMQrei5Xvo4b",
+	"3/TkI8YEy/EygCrGUSfE5vmXB+jv/H4Blp7WwbwUlvrD8T8EYeZ/7CLeSauKihvDF9Bn15ZmpbbozlTC",
+	"+1nQXIVlc60sduNKOLmsXwaAxmizC9dnfpO3+azevwGUTvBOtxy5jcsAEiQupD/bhnIZQIbW8hn2rG0E",
+	"XW8MSvvj2r+jypsEbWxETkK72hhrRVwoy07evj1nPnDmzlnGVcJsjrGYiphNCisUWsuknom4te93SpFJ",
+	"bollhSU2QfahiKJ9/JsNoyj6Yw8CQFVkMLp8EkVR8CSKhuMAMqFE5p7+FUWNcByfM1+prwfuzGDOjavZ",
+	"1sXVBHHGFZ+heT1HIzVP0CmvWXylD2ISczw3eiIxO1Ve/g6E5wbxhKvEHpI6mHMh+URIQYsub7xcletg",
+	"T7SWyFUH7dXelo2dKtssX18uuhdILrYTYUmbxY+YrQHEhbFl0B2953yGF+I/j2DGr0uxDJ1YGukMu8q5",
+	"pQJs4rWLoNtoOCtzzJ67RLs/d/brvGjeEPfzYFtCfJ1TW9PsHk6erWreRoYWlGrzSHuWACY6WfSKOjbI",
+	"CZMDajmecMIBiQw73i8DEPcMssLuQeMU9g3GKOaY3KFSer8b4iqQ1iFp3Tde0f9OUKoLOqxA/aGU8FMR",
+	"voPQVaxr5JUlskNb1aTcvYutS0GnkQ1A4TXduS2yUB1wPr4qpDzmxB+iJ7xAlVROr72bv3JWq4KoUyHj",
+	"1y9RzRyv+1H1aqwfDIO7AeLv6h+nWiF8g9fleiJ/MaJu9sW4MIIWF26ttD5BbtAcFC7i+t/zOnX+efcW",
+	"qonZFya/usqllCgvuRJqqr2CBLmmDw65umIXRe5ShzkyWNVzsoPzUwhgjsaW7fN86CLROSqeCxjB/l60",
+	"tw+BTzbvYBjXg4eHTpcyaPfgZ9xcsbxsWBm3zGo5x8Q34P40czkJ3ozh7owrd3CuLTVTjTe5+hiyRV+r",
+	"LWHnY8lyXMoDbVNp3WyAqtRtnksRe+PhR+u8vln7TnKrljfnyY06QqZA/6AUmAftzyh6CPuVhL0DbQY8",
+	"xx7rpNJaOK37mO28ufxgnFkxU1wycnec/pYxgzxZMNIsQS7ZZ0EpU/i5Jtju9TLZtE3fiskHgrM74fTA",
+	"+UozVxaYVswWcYzW7tWwzlpd+HZsXyB52bO03NmPWrunf7xJ0D+rfedM2DIA9fBXv7uZFJY2qbO3k+a/",
+	"BghLTE89gbbMAFcid6RAPRQ98gzozG5b6kkXvVu/QPQCepRifMX42l4H6wf/nYH5qz4AmxREWm3FdKvV",
+	"Rw/zzgG1B/lDD0Ybsqnks4YHu2pqdlR2V7SrJslVcydsJ+h+oNd6pcdbhnp60u9cg/payu0FiFUjRUne",
+	"WgfoUV3v/S7HDjOLZl5j3r7wGOcodZ6hIlbuggAKI6s2cBSGUsdcptrS6Gn0dBi6xm68/D8AAP//sHQz",
+	"VHEaAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

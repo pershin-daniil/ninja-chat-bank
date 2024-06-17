@@ -9,6 +9,7 @@ import (
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/chat"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/store/message"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/store/problem"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 )
 
@@ -41,6 +42,21 @@ func validatePageSize(ps int) error {
 	}
 
 	return nil
+}
+
+// GetProblemMessages returns Nth page of messages in the chat for manager side (specific problem).
+func (r *Repo) GetProblemMessages(
+	ctx context.Context,
+	problemID types.ProblemID,
+	pageSize int,
+	cursor *Cursor,
+) ([]Message, *Cursor, error) {
+	query := r.db.Message(ctx).Query().
+		Unique(false).
+		Where(message.IsVisibleForManager(true)).
+		Where(message.HasProblemWith(problem.ID(problemID)))
+
+	return r.getChatMessages(ctx, query, pageSize, cursor)
 }
 
 // GetClientChatMessages returns Nth page of messages in the chat for client side.

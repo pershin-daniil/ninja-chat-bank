@@ -2,65 +2,33 @@ package keycloakclient
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/go-resty/resty/v2"
+
+	"github.com/pershin-daniil/ninja-chat-bank/internal/buildinfo"
 )
 
 type IntrospectTokenResult struct {
-	Exp    int      `json:"exp"`
-	Iat    int      `json:"iat"`
-	Aud    []string `json:"aud"`
-	Active bool     `json:"active"`
-}
-
-func (t *IntrospectTokenResult) UnmarshalJSON(data []byte) error {
-	var tmp struct {
-		Exp    int  `json:"exp"`
-		Iat    int  `json:"iat"`
-		Aud    any  `json:"aud"`
-		Active bool `json:"active"`
-	}
-
-	if err := json.Unmarshal(data, &tmp); err != nil {
-		return fmt.Errorf("failed to unmarshal: %v", err)
-	}
-
-	t.Exp = tmp.Exp
-	t.Iat = tmp.Iat
-	t.Active = tmp.Active
-
-	if tmp.Aud == nil {
-		return nil
-	}
-
-	switch audType := tmp.Aud.(type) {
-	case []any:
-		for _, elem := range audType {
-			if elemString, ok := elem.(string); ok {
-				t.Aud = append(t.Aud, elemString)
-			}
-		}
-	case string:
-		t.Aud = []string{audType}
-	default:
-		return errors.New("failed to unmarshall Aud type")
-	}
-
-	return nil
+	Exp    int           `json:"exp"`
+	Iat    int           `json:"iat"`
+	Aud    StringOrSlice `json:"aud"`
+	Active bool          `json:"active"`
 }
 
 // IntrospectToken implements
 // https://www.keycloak.org/docs/latest/authorization_services/index.html#obtaining-information-about-an-rpt
 func (c *Client) IntrospectToken(ctx context.Context, token string) (*IntrospectTokenResult, error) {
-	url := fmt.Sprintf("/realms/%s/protocol/openid-connect/token/introspect", c.realm)
+	url := fmt.Sprintf("realms/%s/protocol/openid-connect/token/introspect", c.realm)
 
 	var result IntrospectTokenResult
 
-	resp, err := c.auth(ctx).SetHeader("Content-Type", "application/x-www-form-urlencoded").
+	resp, err := c.auth(ctx).
+		SetHeader("Content-Type", "application/x-www-form-urlencoded").
 		SetFormData(map[string]string{
 			"token_type_hint": "requesting_party_token",
 			"token":           token,
@@ -68,16 +36,36 @@ func (c *Client) IntrospectToken(ctx context.Context, token string) (*Introspect
 		SetResult(&result).
 		Post(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to request to keycloak: %v", err)
+		return nil, fmt.Errorf("send request to keycloak: %v", err)
 	}
-
 	if resp.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("failed to request to keycloak: %v", resp.Status())
+		return nil, fmt.Errorf("errored keycloak response: %v", resp.Status())
 	}
 
 	return &result, nil
 }
 
 func (c *Client) auth(ctx context.Context) *resty.Request {
-	return c.cli.R().SetContext(ctx).SetBasicAuth(c.clientID, c.clientSecret)
+	authStr := base64.StdEncoding.EncodeToString([]byte(c.clientID + ":" + c.clientSecret))
+	return c.cli.R().
+		SetContext(ctx).
+		// Another way:
+		// SetAuthScheme("Basic").SetAuthToken(authStr)
+		SetHeader("Authorization", "Basic "+authStr).
+		SetHeader("User-Agent", "chat-service/"+buildinfo.Version())
+}
+
+type StringOrSlice []string
+
+func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
+	if len(data) > 1 && data[0] == '[' {
+		return json.Unmarshal(data, (*[]string)(s))
+	}
+
+	str, err := strconv.Unquote(string(data))
+	if err != nil {
+		return err
+	}
+	*s = []string{str}
+	return nil
 }

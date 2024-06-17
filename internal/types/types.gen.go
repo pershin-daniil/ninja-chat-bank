@@ -8,35 +8,9 @@ import (
 	"github.com/google/uuid"
 )
 
-var ChatIDNil = ChatID(uuid.Nil)
-
-type ChatID uuid.UUID
-
-func NewChatID() ChatID                           { return ChatID(uuid.New()) }
-func (t ChatID) String() string                   { return uuid.UUID(t).String() }
-func (t ChatID) Value() (driver.Value, error)     { return t.String(), nil }
-func (t *ChatID) Scan(src any) error              { return (*uuid.UUID)(t).Scan(src) }
-func (t ChatID) MarshalText() ([]byte, error)     { return uuid.UUID(t).MarshalText() }
-func (t *ChatID) UnmarshalText(data []byte) error { return (*uuid.UUID)(t).UnmarshalText(data) }
-func (t ChatID) IsZero() bool                     { return t == ChatIDNil }
-func (t ChatID) Matches(x any) bool {
-	v, ok := x.(ChatID)
-	if !ok {
-		return false
-	}
-	return t.String() == v.String()
-}
-func (t ChatID) Validate() error {
-	if t.IsZero() {
-		return errors.New("zero ChatID")
-	}
-	return nil
-}
-
 var EventIDNil = EventID(uuid.Nil)
 
-type EventID uuid.UUID
-
+type EventID uuid.UUID                             //
 func NewEventID() EventID                          { return EventID(uuid.New()) }
 func (t EventID) String() string                   { return uuid.UUID(t).String() }
 func (t EventID) Value() (driver.Value, error)     { return t.String(), nil }
@@ -57,36 +31,46 @@ func (t EventID) Validate() error {
 	}
 	return nil
 }
+func (t EventID) AsPointer() *EventID {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
 
-var EventClientIDNil = EventClientID(uuid.Nil)
+var ChatIDNil = ChatID(uuid.Nil)
 
-type EventClientID uuid.UUID
-
-func NewEventClientID() EventClientID                    { return EventClientID(uuid.New()) }
-func (t EventClientID) String() string                   { return uuid.UUID(t).String() }
-func (t EventClientID) Value() (driver.Value, error)     { return t.String(), nil }
-func (t *EventClientID) Scan(src any) error              { return (*uuid.UUID)(t).Scan(src) }
-func (t EventClientID) MarshalText() ([]byte, error)     { return uuid.UUID(t).MarshalText() }
-func (t *EventClientID) UnmarshalText(data []byte) error { return (*uuid.UUID)(t).UnmarshalText(data) }
-func (t EventClientID) IsZero() bool                     { return t == EventClientIDNil }
-func (t EventClientID) Matches(x any) bool {
-	v, ok := x.(EventClientID)
+type ChatID uuid.UUID                             //
+func NewChatID() ChatID                           { return ChatID(uuid.New()) }
+func (t ChatID) String() string                   { return uuid.UUID(t).String() }
+func (t ChatID) Value() (driver.Value, error)     { return t.String(), nil }
+func (t *ChatID) Scan(src any) error              { return (*uuid.UUID)(t).Scan(src) }
+func (t ChatID) MarshalText() ([]byte, error)     { return uuid.UUID(t).MarshalText() }
+func (t *ChatID) UnmarshalText(data []byte) error { return (*uuid.UUID)(t).UnmarshalText(data) }
+func (t ChatID) IsZero() bool                     { return t == ChatIDNil }
+func (t ChatID) Matches(x any) bool {
+	v, ok := x.(ChatID)
 	if !ok {
 		return false
 	}
 	return t.String() == v.String()
 }
-func (t EventClientID) Validate() error {
+func (t ChatID) Validate() error {
 	if t.IsZero() {
-		return errors.New("zero EventClientID")
+		return errors.New("zero ChatID")
 	}
 	return nil
+}
+func (t ChatID) AsPointer() *ChatID {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
 }
 
 var FailedJobIDNil = FailedJobID(uuid.Nil)
 
-type FailedJobID uuid.UUID
-
+type FailedJobID uuid.UUID                             //
 func NewFailedJobID() FailedJobID                      { return FailedJobID(uuid.New()) }
 func (t FailedJobID) String() string                   { return uuid.UUID(t).String() }
 func (t FailedJobID) Value() (driver.Value, error)     { return t.String(), nil }
@@ -107,11 +91,16 @@ func (t FailedJobID) Validate() error {
 	}
 	return nil
 }
+func (t FailedJobID) AsPointer() *FailedJobID {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
 
 var JobIDNil = JobID(uuid.Nil)
 
-type JobID uuid.UUID
-
+type JobID uuid.UUID                             //
 func NewJobID() JobID                            { return JobID(uuid.New()) }
 func (t JobID) String() string                   { return uuid.UUID(t).String() }
 func (t JobID) Value() (driver.Value, error)     { return t.String(), nil }
@@ -132,11 +121,16 @@ func (t JobID) Validate() error {
 	}
 	return nil
 }
+func (t JobID) AsPointer() *JobID {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
 
 var MessageIDNil = MessageID(uuid.Nil)
 
-type MessageID uuid.UUID
-
+type MessageID uuid.UUID                             //
 func NewMessageID() MessageID                        { return MessageID(uuid.New()) }
 func (t MessageID) String() string                   { return uuid.UUID(t).String() }
 func (t MessageID) Value() (driver.Value, error)     { return t.String(), nil }
@@ -157,11 +151,16 @@ func (t MessageID) Validate() error {
 	}
 	return nil
 }
+func (t MessageID) AsPointer() *MessageID {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
 
 var ProblemIDNil = ProblemID(uuid.Nil)
 
-type ProblemID uuid.UUID
-
+type ProblemID uuid.UUID                             //
 func NewProblemID() ProblemID                        { return ProblemID(uuid.New()) }
 func (t ProblemID) String() string                   { return uuid.UUID(t).String() }
 func (t ProblemID) Value() (driver.Value, error)     { return t.String(), nil }
@@ -182,11 +181,16 @@ func (t ProblemID) Validate() error {
 	}
 	return nil
 }
+func (t ProblemID) AsPointer() *ProblemID {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
 
 var RequestIDNil = RequestID(uuid.Nil)
 
-type RequestID uuid.UUID
-
+type RequestID uuid.UUID                             //
 func NewRequestID() RequestID                        { return RequestID(uuid.New()) }
 func (t RequestID) String() string                   { return uuid.UUID(t).String() }
 func (t RequestID) Value() (driver.Value, error)     { return t.String(), nil }
@@ -207,11 +211,16 @@ func (t RequestID) Validate() error {
 	}
 	return nil
 }
+func (t RequestID) AsPointer() *RequestID {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
 
 var UserIDNil = UserID(uuid.Nil)
 
-type UserID uuid.UUID
-
+type UserID uuid.UUID                             //
 func NewUserID() UserID                           { return UserID(uuid.New()) }
 func (t UserID) String() string                   { return uuid.UUID(t).String() }
 func (t UserID) Value() (driver.Value, error)     { return t.String(), nil }
@@ -232,9 +241,15 @@ func (t UserID) Validate() error {
 	}
 	return nil
 }
+func (t UserID) AsPointer() *UserID {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
 
 type TypeSet = interface {
-	ChatID | EventID | EventClientID | FailedJobID | JobID | MessageID | ProblemID | RequestID | UserID
+	EventID | ChatID | FailedJobID | JobID | MessageID | ProblemID | RequestID | UserID
 }
 
 func Parse[T TypeSet](s string) (T, error) {

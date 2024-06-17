@@ -6,6 +6,7 @@ require (
 	entgo.io/ent v0.13.1
 	github.com/BurntSushi/toml v1.3.2
 	github.com/brianvoe/gofakeit/v7 v7.0.3
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/getkin/kin-openapi v0.124.0
 	github.com/getsentry/sentry-go v0.27.0
 	github.com/go-playground/validator/v10 v10.20.0
@@ -14,6 +15,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.1
+	github.com/imkira/go-observer v1.0.3
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/kazhuravlev/options-gen v0.32.0
 	github.com/kelseyhightower/envconfig v1.4.0
@@ -23,9 +25,11 @@ require (
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/onsi/ginkgo/v2 v2.18.0
 	github.com/onsi/gomega v1.33.1
+	github.com/quasilyte/go-ruleguard/dsl v0.3.22
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/stretchr/testify v1.9.0
 	github.com/tchap/zapext/v2 v2.1.1
+	go.uber.org/atomic v1.9.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/mock v0.4.0
 	go.uber.org/multierr v1.11.0

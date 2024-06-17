@@ -9,12 +9,13 @@ import (
 )
 
 func ParseAndValidate(filename string) (Config, error) {
-	var config Config
-	if _, err := toml.DecodeFile(filename, &config); err != nil {
-		return Config{}, fmt.Errorf("failed to decode file %s: %v", filename, err)
+	var cfg Config
+	if _, err := toml.DecodeFile(filename, &cfg); err != nil {
+		return Config{}, fmt.Errorf("decode file: %v", err)
 	}
-	if err := validator.Validator.Struct(config); err != nil {
-		return Config{}, fmt.Errorf("failed to validate config: %v", err)
+
+	if err := validator.Validator.Struct(cfg); err != nil {
+		return Config{}, fmt.Errorf("validate: %v", err)
 	}
-	return config, nil
+	return cfg, nil
 }

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Ninja Bank Support Chat Client API
+  title: Bank Support Chat Client API
   version: v1
 
 servers:
@@ -93,12 +93,12 @@ components:
       minimum: 400
 
     SendMessageRequest:
-      required: [ messageBody]
+      required: [ messageBody ]
       properties:
         messageBody:
           type: string
-          minimum: 1
-          maximum: 3000
+          minLength: 1
+          maxLength: 3000
 
     SendMessageResponse:
       properties:
@@ -124,8 +124,7 @@ components:
             path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
         createdAt:
           type: string
-          format: 'date-time'
-
+          format: date-time
 
     # /getHistory
 

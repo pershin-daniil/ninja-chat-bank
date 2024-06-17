@@ -9,7 +9,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
-	"go.uber.org/zap"
 
 	"github.com/pershin-daniil/ninja-chat-bank/internal/middlewares"
 	managerv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/v1"
@@ -23,7 +22,11 @@ type HandlersSuite struct {
 
 	ctrl                      *gomock.Controller
 	canReceiveProblemsUseCase *managerv1mocks.MockcanReceiveProblemsUseCase
-	freeHandsUseCase          *managerv1mocks.MockfreeHandsUseCase
+	freeHandsSignalUseCase    *managerv1mocks.MockfreeHandsSignalUseCase
+	getChatsUseCase           *managerv1mocks.MockgetChatsUseCase
+	getChatHistoryUseCase     *managerv1mocks.MockgetChatHistoryUseCase
+	sendMessageUseCase        *managerv1mocks.MocksendMessageUseCase
+	closeChatUseCase          *managerv1mocks.MockcloseChatUseCase
 	handlers                  managerv1.Handlers
 
 	managerID types.UserID
@@ -37,10 +40,22 @@ func TestHandlersSuite(t *testing.T) {
 func (s *HandlersSuite) SetupTest() {
 	s.ctrl = gomock.NewController(s.T())
 	s.canReceiveProblemsUseCase = managerv1mocks.NewMockcanReceiveProblemsUseCase(s.ctrl)
-	s.freeHandsUseCase = managerv1mocks.NewMockfreeHandsUseCase(s.ctrl)
+	s.freeHandsSignalUseCase = managerv1mocks.NewMockfreeHandsSignalUseCase(s.ctrl)
+	s.getChatsUseCase = managerv1mocks.NewMockgetChatsUseCase(s.ctrl)
+	s.getChatsUseCase = managerv1mocks.NewMockgetChatsUseCase(s.ctrl)
+	s.getChatHistoryUseCase = managerv1mocks.NewMockgetChatHistoryUseCase(s.ctrl)
+	s.sendMessageUseCase = managerv1mocks.NewMocksendMessageUseCase(s.ctrl)
+	s.closeChatUseCase = managerv1mocks.NewMockcloseChatUseCase(s.ctrl)
 	{
 		var err error
-		s.handlers, err = managerv1.NewHandlers(managerv1.NewOptions(zap.L(), s.canReceiveProblemsUseCase, s.freeHandsUseCase))
+		s.handlers, err = managerv1.NewHandlers(managerv1.NewOptions(
+			s.canReceiveProblemsUseCase,
+			s.freeHandsSignalUseCase,
+			s.getChatsUseCase,
+			s.getChatHistoryUseCase,
+			s.sendMessageUseCase,
+			s.closeChatUseCase,
+		))
 		s.Require().NoError(err)
 	}
 	s.managerID = types.NewUserID()
@@ -57,7 +72,7 @@ func (s *HandlersSuite) TearDownTest() {
 func (s *HandlersSuite) newEchoCtx(
 	requestID types.RequestID,
 	path string,
-	body string, //nolint:unparam // it's ok for tests
+	body string, //nolint:unparam // param will be used later
 ) (*httptest.ResponseRecorder, echo.Context) {
 	req := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)

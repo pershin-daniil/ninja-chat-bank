@@ -29,7 +29,6 @@ func (s *KeycloakSuite) SetupSuite() {
 		testingh.Config.KeycloakRealm,
 		testingh.Config.KeycloakClientID,
 		testingh.Config.KeycloakClientSecret,
-		false,
 		keycloakclient.WithDebugMode(true),
 	))
 	s.Require().NoError(err)
