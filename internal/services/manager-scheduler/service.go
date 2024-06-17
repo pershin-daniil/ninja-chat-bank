@@ -129,7 +129,7 @@ func (s *Service) notifyClientAboutAssignment(ctx context.Context, problem *prob
 	}
 
 	return s.txtor.RunInTx(ctx, func(ctx context.Context) error {
-		text := managerAssignedMessageText(managerID)
+		text := ManagerAssignedMessageText(managerID)
 		msg, err := s.msgRepo.CreateServiceClientVisible(ctx, types.NewRequestID(), problem.ID, problem.ChatID, text)
 		if err != nil {
 			return fmt.Errorf("create service message: %v", err)
@@ -152,6 +152,6 @@ func (s *Service) notifyClientAboutAssignment(ctx context.Context, problem *prob
 	})
 }
 
-func managerAssignedMessageText(managerID types.UserID) string {
+func ManagerAssignedMessageText(managerID types.UserID) string {
 	return fmt.Sprintf(managerAssignedMsgTemplate, managerID)
 }
