@@ -53,7 +53,7 @@ func (s *UseCaseSuite) TestHandle_RequestValidationError() {
 
 	// Assert.
 	s.Require().Error(err)
-	s.ErrorIs(err, getchats.ErrInvalidRequest)
+	s.Require().ErrorIs(err, getchats.ErrInvalidRequest)
 	s.Empty(resp.Chats)
 }
 

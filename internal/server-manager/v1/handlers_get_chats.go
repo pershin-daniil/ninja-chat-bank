@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+
 	internalerrors "github.com/pershin-daniil/ninja-chat-bank/internal/errors"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/middlewares"
 	getchats "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chats"

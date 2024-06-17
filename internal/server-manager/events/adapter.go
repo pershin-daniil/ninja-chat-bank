@@ -25,6 +25,17 @@ func (Adapter) Adapt(ev eventstream.Event) (any, error) {
 			RequestID:           t.RequestID,
 			CanTakeMoreProblems: t.CanTakeMoreProblems,
 		}, nil
+	case *eventstream.NewMessageEvent:
+		return NewMessageEvent{
+			ClientID:  t.AuthorID,
+			Body:      t.MessageBody,
+			ChatID:    t.ChatID,
+			CreatedAt: t.CreatedAt,
+			ID:        t.EventID,
+			EventType: string(EventTypeNewMessageEvent),
+			MessageID: t.MessageID,
+			RequestID: t.RequestID,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unknown event type: %s", t)
 	}

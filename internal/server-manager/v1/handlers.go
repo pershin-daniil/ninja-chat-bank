@@ -3,10 +3,10 @@ package managerv1
 import (
 	"context"
 	"fmt"
-	getchats "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chats"
 
 	canreceiveproblems "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/can-receive-problems"
 	freehandssignal "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands-signal"
+	getchats "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chats"
 )
 
 var _ ServerInterface = (*Handlers)(nil)

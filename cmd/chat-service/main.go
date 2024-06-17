@@ -47,6 +47,7 @@ func main() {
 	}
 }
 
+//nolint:gocyclo // ignore cyclomatic complexity
 func run() (errReturned error) {
 	flag.Parse()
 

@@ -77,7 +77,7 @@ func (j *Job) Handle(ctx context.Context, payload string) error {
 
 	// Send update to client.
 	wg.Go(func() error {
-		if err = j.eventStream.Publish(ctx, msg.AuthorID,
+		if err := j.eventStream.Publish(ctx, msg.AuthorID,
 			eventstream.NewMessageSentEvent(
 				types.NewEventID(),
 				msg.InitialRequestID,
@@ -85,6 +85,24 @@ func (j *Job) Handle(ctx context.Context, payload string) error {
 			),
 		); err != nil {
 			return fmt.Errorf("publish MessageSentEvent to client: %v", err)
+		}
+		return nil
+	})
+
+	wg.Go(func() error {
+		if err := j.eventStream.Publish(ctx, msg.AuthorID,
+			eventstream.NewNewMessageEvent(
+				types.NewEventID(),
+				msg.InitialRequestID,
+				msg.ChatID,
+				msg.ID,
+				msg.AuthorID,
+				msg.CreatedAt,
+				msg.Body,
+				msg.IsService,
+			),
+		); err != nil {
+			return fmt.Errorf("publish NewMessageEvent to manager: %v", err)
 		}
 		return nil
 	})

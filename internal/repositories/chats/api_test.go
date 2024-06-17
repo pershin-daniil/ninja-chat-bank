@@ -122,10 +122,9 @@ func (s *ChatsRepoSuite) createChatWithProblem(managerID types.UserID) types.Cha
 	return chatID
 }
 
-func (s *ChatsRepoSuite) createChatWithResolvedProblem(managerID types.UserID) types.ChatID {
+func (s *ChatsRepoSuite) createChatWithResolvedProblem(managerID types.UserID) {
 	chatID := s.createChat()
 	s.createResolvedProblem(chatID, managerID)
-	return chatID
 }
 
 func (s *ChatsRepoSuite) createChat() types.ChatID {

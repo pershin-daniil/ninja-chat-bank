@@ -2,13 +2,12 @@ package main
 
 import (
 	"fmt"
-	chatsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/chats"
-	getchats "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chats"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"go.uber.org/zap"
 
 	keycloakclient "github.com/pershin-daniil/ninja-chat-bank/internal/clients/keycloak"
+	chatsrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/chats"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/server"
 	servermanager "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager"
 	managererrhandler "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/errhandler"
@@ -20,6 +19,7 @@ import (
 	managerpool "github.com/pershin-daniil/ninja-chat-bank/internal/services/manager-pool"
 	canreceiveproblems "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/can-receive-problems"
 	freehandssignal "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands-signal"
+	getchats "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/get-chats"
 	websocketstream "github.com/pershin-daniil/ninja-chat-bank/internal/websocket-stream"
 )
 
@@ -54,6 +54,9 @@ func initServerManager(
 	}
 
 	getChatsUseCase, err := getchats.New(getchats.NewOptions(chatsRepo))
+	if err != nil {
+		return nil, fmt.Errorf("create getchats usecase: %v", err)
+	}
 
 	v1Handlers, err := managerv1.NewHandlers(managerv1.NewOptions(
 		canReceiveProblemsUseCase,
