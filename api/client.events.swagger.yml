@@ -6,61 +6,24 @@ info:
 servers:
   - url: ws://localhost:8080/ws
     description: Development server
-
-paths:
-  /stub:
-    get:
-      description: It uses for generating events. Otherwise it doesn't.
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Event'
+  - url: /ws
+    description: E2E server
 
 components:
   schemas:
-    Event:
-      oneOf:
-        - $ref: "#/components/schemas/NewMessageEvent"
-        - $ref: "#/components/schemas/MessageSentEvent"
-        - $ref: "#/components/schemas/MessageBlockedEvent"
-      discriminator:
-        propertyName: eventType
-        mapping:
-          NewMessageEvent: "#/components/schemas/NewMessageEvent"
-          MessageSentEvent: "#/components/schemas/MessageSentEvent"
-          MessageBlockedEvent: "#/components/schemas/MessageBlockedEvent"
-
-    EventCommon:
-      type: object
-      required: [ eventId, eventType, messageId, requestId ]
+    MessageId:
+      required: [ messageId ]
       properties:
-        eventId:
-          type: string
-          format: uuid
-          x-go-type: types.EventID
-          x-go-type-import:
-            path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
-        eventType:
-          type: string
         messageId:
           type: string
           format: uuid
           x-go-type: types.MessageID
           x-go-type-import:
             path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
-        requestId:
-          type: string
-          format: uuid
-          x-go-type: types.RequestID
-          x-go-type-import:
-            path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
 
-    NewMessageEvent:
+    Message:
       allOf:
-        - $ref: '#/components/schemas/EventCommon'
+        - $ref: "#/components/schemas/MessageId"
         - type: object
           required: [ body, createdAt, isService ]
           properties:
@@ -78,10 +41,39 @@ components:
             isService:
               type: boolean
 
+    Event:
+      required: [ eventType, eventId, requestId ]
+      properties:
+        eventType:
+          type: string
+        eventId:
+          type: string
+          format: uuid
+          x-go-type: types.EventID
+          x-go-import:
+            path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+        requestId:
+          type: string
+          format: uuid
+          x-go-type: types.RequestID
+          x-go-import:
+            path: "github.com/pershin-daniil/ninja-chat-bank/internal/types"
+      oneOf:
+        - $ref: "#/components/schemas/NewMessageEvent"
+        - $ref: "#/components/schemas/MessageSentEvent"
+        - $ref: "#/components/schemas/MessageBlockedEvent"
+      discriminator:
+        propertyName: eventType
+        mapping:
+          NewMessageEvent: "#/components/schemas/NewMessageEvent"
+          MessageSentEvent: "#/components/schemas/MessageSentEvent"
+          MessageBlockedEvent: "#/components/schemas/MessageBlockedEvent"
+
+    NewMessageEvent:
+      $ref: "#/components/schemas/Message"
+
     MessageSentEvent:
-      allOf:
-        - $ref: "#/components/schemas/EventCommon"
+      $ref: "#/components/schemas/MessageId"
 
     MessageBlockedEvent:
-      allOf:
-        - $ref: "#/components/schemas/EventCommon"
+      $ref: "#/components/schemas/MessageId"

@@ -2,86 +2,103 @@ package inmemeventstream
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
-	"time"
+
+	"github.com/imkira/go-observer"
+	"go.uber.org/zap"
 
 	eventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 )
 
-var ErrEventStreamClosed = errors.New("event stream closed")
+const serviceName = "event-stream"
 
 type Service struct {
-	clients *clients
-
-	closed bool
-
-	mu sync.Mutex
-	wg sync.WaitGroup
+	wg        sync.WaitGroup
+	mu        sync.RWMutex
+	subs      map[types.UserID]observer.Property
+	subsCount map[types.UserID]int
+	logger    *zap.Logger
 }
 
 func New() *Service {
 	return &Service{
-		clients: newClients(),
-		closed:  false,
+		wg:        sync.WaitGroup{},
+		mu:        sync.RWMutex{},
+		subs:      map[types.UserID]observer.Property{},
+		subsCount: map[types.UserID]int{},
+		logger:    zap.L().Named(serviceName),
 	}
 }
 
 func (s *Service) Subscribe(ctx context.Context, userID types.UserID) (<-chan eventstream.Event, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.closed {
-		return nil, ErrEventStreamClosed
+	p, ok := s.subs[userID]
+	if !ok {
+		p = observer.NewProperty(nil)
+		s.subs[userID] = p
 	}
 
-	client := s.clients.add(ctx, userID)
+	s.subsCount[userID]++
+	s.mu.Unlock()
 
-	return client.ch, nil
+	stream := p.Observe()
+	events := make(chan eventstream.Event)
+
+	s.wg.Add(1)
+	go func() {
+		defer func() {
+			s.mu.Lock()
+			s.subsCount[userID]--
+			s.mu.Unlock()
+
+			close(events)
+			s.wg.Done()
+		}()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+
+			case <-stream.Changes():
+				select {
+				case <-ctx.Done():
+					return
+				case events <- stream.Next().(eventstream.Event):
+				}
+			}
+		}
+	}()
+	return events, nil
 }
 
 func (s *Service) Publish(_ context.Context, userID types.UserID, event eventstream.Event) error {
-	s.wg.Add(1)
-	defer s.wg.Done()
-
 	if err := event.Validate(); err != nil {
-		return fmt.Errorf("validate event: %v", err)
+		return fmt.Errorf("invalid event: %v", err)
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.closed {
-		return ErrEventStreamClosed
+	if v := s.getSubsCount(userID); v == 0 {
+		s.logger.With(zap.Stringer("user_id", userID)).Debug("no subscribers")
+		return nil
 	}
 
-	for _, c := range s.clients.get(userID) {
-		select {
-		case <-c.ctx.Done():
-			s.clients.remove(c)
-			continue
-		default:
-		}
+	s.mu.RLock()
+	p := s.subs[userID]
+	s.mu.RUnlock()
 
-		timer := time.NewTimer(time.Second)
-		select {
-		case <-timer.C:
-			s.clients.remove(c)
-			continue
-		case c.ch <- event:
-		}
-	}
-
+	p.Update(event)
 	return nil
 }
 
 func (s *Service) Close() error {
-	s.mu.Lock()
-	s.closed = true
-	s.mu.Unlock()
-
 	s.wg.Wait()
 	return nil
+}
+
+func (s *Service) getSubsCount(uid types.UserID) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.subsCount[uid]
 }

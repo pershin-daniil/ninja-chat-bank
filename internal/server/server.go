@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
 	echomdlwr "github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
@@ -17,23 +16,23 @@ import (
 )
 
 const (
+	bodyLimit = "12KB" // ~ 3000 characters * 4 bytes.
+
 	readHeaderTimeout = time.Second
 	shutdownTimeout   = 3 * time.Second
-	bodyLimit         = "12KB"
 )
 
 //go:generate options-gen -out-filename=server_options.gen.go -from-struct=Options
 type Options struct {
-	logger           *zap.Logger              `option:"mandatory" validate:"required"`
-	addr             string                   `option:"mandatory" validate:"required,hostname_port"`
-	allowOrigins     []string                 `option:"mandatory" validate:"min=1"`
-	v1Swagger        *openapi3.T              `option:"mandatory" validate:"required"`
-	registerHandlers func(e *echo.Echo)       `option:"mandatory" validate:"required"`
-	introspector     middlewares.Introspector `option:"mandatory" validate:"required"`
-	resource         string                   `option:"mandatory" validate:"required"`
-	role             string                   `option:"mandatory" validate:"required"`
-	wsSecProtocol    string                   `option:"mandatory" validate:"required"`
-	errHandler       echo.HTTPErrorHandler    `option:"mandatory" validate:"required"`
+	logger            *zap.Logger              `option:"mandatory" validate:"required"`
+	addr              string                   `option:"mandatory" validate:"required,hostname_port"`
+	allowOrigins      []string                 `option:"mandatory" validate:"min=1"`
+	introspector      middlewares.Introspector `option:"mandatory" validate:"required"`
+	requiredResource  string                   `option:"mandatory" validate:"required"`
+	requiredRole      string                   `option:"mandatory" validate:"required"`
+	secWsProtocol     string                   `option:"mandatory" validate:"required"`
+	handlersRegistrar func(e *echo.Echo)       `option:"mandatory" validate:"required"`
+	shutdown          func()                   `option:"mandatory" validate:"required"`
 }
 
 type Server struct {
@@ -47,7 +46,6 @@ func New(opts Options) (*Server, error) {
 	}
 
 	e := echo.New()
-	e.HTTPErrorHandler = opts.errHandler
 	e.Use(
 		middlewares.NewRequestLogger(opts.logger),
 		middlewares.NewRecovery(opts.logger),
@@ -55,19 +53,29 @@ func New(opts Options) (*Server, error) {
 			AllowOrigins: opts.allowOrigins,
 			AllowMethods: []string{http.MethodPost},
 		}),
-		middlewares.NewKeycloakTokenAuth(opts.introspector, opts.resource, opts.role, opts.wsSecProtocol),
+		middlewares.NewKeycloakTokenAuth(
+			opts.introspector,
+			opts.requiredResource,
+			opts.requiredRole,
+			opts.secWsProtocol,
+		),
 		echomdlwr.BodyLimit(bodyLimit),
 	)
 
-	opts.registerHandlers(e)
+	opts.handlersRegistrar(e)
+
+	srv := &http.Server{
+		Addr:              opts.addr,
+		Handler:           e,
+		ReadHeaderTimeout: readHeaderTimeout,
+	}
+
+	// Register custom shutdown function to directly stop long-living connections like websockets.
+	srv.RegisterOnShutdown(opts.shutdown)
 
 	return &Server{
-		lg: opts.logger,
-		srv: &http.Server{
-			Addr:              opts.addr,
-			Handler:           e,
-			ReadHeaderTimeout: readHeaderTimeout,
-		},
+		lg:  opts.logger,
+		srv: srv,
 	}, nil
 }
 
@@ -80,11 +88,7 @@ func (s *Server) Run(ctx context.Context) error {
 		gfCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
-		if err := s.srv.Shutdown(gfCtx); err != nil { //nolint:contextcheck // graceful shutdown with new context
-			return fmt.Errorf("failed to graceful shutdown: %v", err)
-		}
-
-		return nil
+		return s.srv.Shutdown(gfCtx) //nolint:contextcheck // graceful shutdown with new context
 	})
 
 	eg.Go(func() error {

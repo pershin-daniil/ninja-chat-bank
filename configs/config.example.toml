@@ -4,6 +4,10 @@ env = "dev"
 [log]
 level = "info"
 
+[sentry]
+# Disabled if empty. Take it from "Settings/sentry/<project>/Client Keys".
+dsn = "http://ad24de14190c46c0a0dd63f506c0219b@localhost:9000/2"
+
 [servers]
 [servers.debug]
 addr = ":8079"
@@ -24,51 +28,58 @@ sec_ws_protocol = "chat-service-protocol"
 resource = "chat-ui-manager"
 role = "support-chat-manager"
 
+[stores]
+use = "psql" # "sqlite", "psql"
+[stores.sqlite]
+# No conf.
+[stores.psql]
+addr = "127.0.0.1:5432"
+username = "chat-service"
+password = "chat-service"
+database = "chat-service"
+debug = false
 
 [clients]
 [clients.keycloak]
 base_path = "http://localhost:3010"
 realm = "Bank"
 client_id = "chat-service"
-client_secret = "подставьте-свой-секрет"
+client_secret = "DJgU5KNPUWoJw9M9XSj1QYW3pbPfsR1s"
 debug_mode = false
 
-[sentry]
-dsn = "DSN from Client Keys page"
-
-[db]
-[db.postgres]
-user = "chat-service"
-password = "chat-service"
-addr = "localhost:5432"
-database = "postgres"
-debug_mode = true
-
 [services]
+[services.afc_verdicts_processor]
+brokers = ["localhost:9092"]
+consumers = 4
+consumer_group = "chat-service"
+batch_size = 1
+verdicts_topic = "afc.msg-verdicts"
+verdicts_dlq_topic = "afc.msg-verdicts.dlq"
+verdicts_signing_public_key = """
+-----BEGIN PUBLIC KEY-----
+MIIBITANBgkqhkiG9w0BAQEFAAOCAQ4AMIIBCQKCAQB2E6hC7U2n+zFVBtMoCxPz
+4HaNo8gh4fyMeSLsKuBSlaKzhTNwtIapgXRma6sZIpsd38AtWm/IESv1Exay+pay
+WQ0StRhncZzsU2VHgdTALiEmkNVWR8LukKvtMZbtZNfFyCq+iQS1hj4WTBHbC1Oc
+S1Gsg7QDMxkFi2K0zoouD0PkHPjzIFI0dbFDEbSoFYv/+QLnJZ17kxaYt4eWICEZ
+NgDXiOhTS8c+o/1Qp6lh1r2yGU+dkm+7YaJe4HGvYy6XPJg6QusN4miGcDAy9Dp+
+xfi/y4DBwDBVRkq7idYMv7FqoOUvRlZv8bJ0JAzanLGsFkWcSVWuBMBnCiSlc4bh
+AgMBAAE=
+-----END PUBLIC KEY-----
+"""
+
+[services.manager_load]
+max_problems_at_same_time = 5
+
+[services.manager_scheduler]
+period = "1s"
+
 [services.msg_producer]
 brokers = ["localhost:9092"]
 topic = "chat.messages"
 batch_size = 1
-encrypt_key = "51655468576D5A7134743777397A2443" # Leave it blank to disable encryption.
+encrypt_key = "" # Leave it blank to disable encryption.
 
 [services.outbox]
 workers = 2
 idle_time = "1s"
 reserve_for = "5m"
-
-[services.manager_load]
-max_problems_at_same_time = 5
-
-[services.afc_verdicts_processor]
-brokers = ["localhost:9092"]
-consumers = 2
-consumer_group = "afc.msg-analyzers"
-verdicts_topic = "afc.msg-verdicts"
-verdicts_dlq_topic = "afc.msg-verdicts.dlq"
-batch_size = 1
-verdicts_signing_public_key = """
------BEGIN PUBLIC KEY-----
-MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAKg4vfl9h1Caqh55IKMoxPXs0JwL2it2
-eJSl6dbfg6YmdcaLcNkz9LbbSBKO7qXhWD1HpPpg6zg+/3NOdK2mF2MCAwEAAQ==
------END PUBLIC KEY-----
-"""

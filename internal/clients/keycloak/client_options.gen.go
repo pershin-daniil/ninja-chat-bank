@@ -15,7 +15,6 @@ func NewOptions(
 	realm string,
 	clientID string,
 	clientSecret string,
-	production bool,
 	options ...OptOptionsSetter,
 ) Options {
 	o := Options{}
@@ -26,7 +25,6 @@ func NewOptions(
 	o.realm = realm
 	o.clientID = clientID
 	o.clientSecret = clientSecret
-	o.production = production
 
 	for _, opt := range options {
 		opt(&o)
@@ -50,7 +48,7 @@ func (o *Options) Validate() error {
 }
 
 func _validate_Options_basePath(o *Options) error {
-	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.basePath, "required"); err != nil {
+	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.basePath, "required,url"); err != nil {
 		return fmt461e464ebed9.Errorf("field `basePath` did not pass the test: %w", err)
 	}
 	return nil

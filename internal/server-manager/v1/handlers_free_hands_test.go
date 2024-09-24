@@ -8,7 +8,7 @@ import (
 	managerv1 "github.com/pershin-daniil/ninja-chat-bank/internal/server-manager/v1"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
 	canreceiveproblems "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/can-receive-problems"
-	freehands "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands"
+	freehandssignal "github.com/pershin-daniil/ninja-chat-bank/internal/usecases/manager/free-hands-signal"
 )
 
 func (s *HandlersSuite) TestGetFreeHandsBtnAvailability_Usecase_Error() {
@@ -52,31 +52,32 @@ func (s *HandlersSuite) TestGetFreeHandsBtnAvailability_Usecase_Success() {
 }`, resp.Body.String())
 }
 
-func (s *HandlersSuite) TestFreeHands_Usecase_SomeError() {
+func (s *HandlersSuite) TestFreeHands_Usecase_ManagerOverloadedError() {
 	// Arrange.
 	reqID := types.NewRequestID()
 	resp, eCtx := s.newEchoCtx(reqID, "/v1/freeHands", "")
-	s.freeHandsUseCase.EXPECT().Handle(eCtx.Request().Context(), freehands.Request{
+	s.freeHandsSignalUseCase.EXPECT().Handle(eCtx.Request().Context(), freehandssignal.Request{
 		ID:        reqID,
 		ManagerID: s.managerID,
-	}).Return(errors.New("biba"))
+	}).Return(freehandssignal.Response{}, freehandssignal.ErrManagerOverloaded)
 
 	// Action.
 	err := s.handlers.PostFreeHands(eCtx, managerv1.PostFreeHandsParams{XRequestID: reqID})
 
 	// Assert.
 	s.Require().Error(err)
+	s.EqualValues(managerv1.ErrorCodeManagerOverloaded, internalerrors.GetServerErrorCode(err))
 	s.Empty(resp.Body)
 }
 
-func (s *HandlersSuite) TestFreeHands_Usecase_ManagerOverloaded() {
+func (s *HandlersSuite) TestFreeHands_Usecase_UnknownError() {
 	// Arrange.
 	reqID := types.NewRequestID()
 	resp, eCtx := s.newEchoCtx(reqID, "/v1/freeHands", "")
-	s.freeHandsUseCase.EXPECT().Handle(eCtx.Request().Context(), freehands.Request{
+	s.freeHandsSignalUseCase.EXPECT().Handle(eCtx.Request().Context(), freehandssignal.Request{
 		ID:        reqID,
 		ManagerID: s.managerID,
-	}).Return(freehands.ErrManagerOverloaded)
+	}).Return(freehandssignal.Response{}, errors.New("something went wrong"))
 
 	// Action.
 	err := s.handlers.PostFreeHands(eCtx, managerv1.PostFreeHandsParams{XRequestID: reqID})
@@ -84,22 +85,22 @@ func (s *HandlersSuite) TestFreeHands_Usecase_ManagerOverloaded() {
 	// Assert.
 	s.Require().Error(err)
 	s.Empty(resp.Body)
-	s.Require().Equal(managerv1.ErrorCodeManagerOverloaded, internalerrors.GetServerErrorCode(err))
 }
 
 func (s *HandlersSuite) TestFreeHands_Usecase_Success() {
 	// Arrange.
 	reqID := types.NewRequestID()
 	resp, eCtx := s.newEchoCtx(reqID, "/v1/freeHands", "")
-	s.freeHandsUseCase.EXPECT().Handle(eCtx.Request().Context(), freehands.Request{
+	s.freeHandsSignalUseCase.EXPECT().Handle(eCtx.Request().Context(), freehandssignal.Request{
 		ID:        reqID,
 		ManagerID: s.managerID,
-	}).Return(nil)
+	}).Return(freehandssignal.Response{}, nil)
 
 	// Action.
 	err := s.handlers.PostFreeHands(eCtx, managerv1.PostFreeHandsParams{XRequestID: reqID})
 
 	// Assert.
 	s.Require().NoError(err)
-	s.Require().Equal(http.StatusOK, resp.Code)
+	s.Equal(http.StatusOK, resp.Code)
+	s.JSONEq(`{"data": null}`, resp.Body.String())
 }

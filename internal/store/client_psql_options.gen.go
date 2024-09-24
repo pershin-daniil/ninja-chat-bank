@@ -16,7 +16,6 @@ func NewPSQLOptions(
 	username string,
 	password string,
 	database string,
-	production bool,
 	options ...OptPSQLOptionsSetter,
 ) PSQLOptions {
 	o := PSQLOptions{}
@@ -27,7 +26,6 @@ func NewPSQLOptions(
 	o.username = username
 	o.password = password
 	o.database = database
-	o.production = production
 
 	for _, opt := range options {
 		opt(&o)
@@ -35,9 +33,9 @@ func NewPSQLOptions(
 	return o
 }
 
-func WithDebugMode(opt bool) OptPSQLOptionsSetter {
+func WithDebug(opt bool) OptPSQLOptionsSetter {
 	return func(o *PSQLOptions) {
-		o.debugMode = opt
+		o.debug = opt
 	}
 }
 

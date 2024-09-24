@@ -12,6 +12,7 @@ import (
 	messagesrepo "github.com/pershin-daniil/ninja-chat-bank/internal/repositories/messages"
 	eventstream "github.com/pershin-daniil/ninja-chat-bank/internal/services/event-stream"
 	msgproducer "github.com/pershin-daniil/ninja-chat-bank/internal/services/msg-producer"
+	"github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/payload/simpleid"
 	sendclientmessagejob "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/send-client-message"
 	sendclientmessagejobmocks "github.com/pershin-daniil/ninja-chat-bank/internal/services/outbox/jobs/send-client-message/mocks"
 	"github.com/pershin-daniil/ninja-chat-bank/internal/types"
@@ -24,10 +25,10 @@ func TestJob_Handle(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	eventStream := sendclientmessagejobmocks.NewMockeventStream(ctrl)
 	msgProducer := sendclientmessagejobmocks.NewMockmessageProducer(ctrl)
 	msgRepo := sendclientmessagejobmocks.NewMockmessageRepository(ctrl)
-	eventStream := sendclientmessagejobmocks.NewMockeventStream(ctrl)
-	job, err := sendclientmessagejob.New(sendclientmessagejob.NewOptions(msgProducer, msgRepo, eventStream))
+	job, err := sendclientmessagejob.New(sendclientmessagejob.NewOptions(eventStream, msgProducer, msgRepo))
 	require.NoError(t, err)
 
 	clientID := types.NewUserID()
@@ -45,6 +46,7 @@ func TestJob_Handle(t *testing.T) {
 		IsVisibleForManager: false,
 		IsBlocked:           false,
 		IsService:           false,
+		InitialRequestID:    types.NewRequestID(),
 	}
 	msgRepo.EXPECT().GetMessageByID(gomock.Any(), msgID).Return(&msg, nil)
 
@@ -55,56 +57,52 @@ func TestJob_Handle(t *testing.T) {
 		FromClient: true,
 	}).Return(nil)
 
-	eventStream.EXPECT().Publish(gomock.Any(), clientID, EqPublishEventParams(msg)).
-		Return(nil)
+	eventStream.EXPECT().Publish(gomock.Any(), clientID,
+		newMessageEventMatcher{
+			NewMessageEvent: &eventstream.NewMessageEvent{
+				EventID:     types.EventIDNil, // No possibility to check.
+				RequestID:   msg.InitialRequestID,
+				ChatID:      msg.ChatID,
+				MessageID:   msg.ID,
+				AuthorID:    msg.AuthorID,
+				CreatedAt:   msg.CreatedAt,
+				MessageBody: msg.Body,
+				IsService:   false,
+			},
+		})
 
 	// Action & assert.
-	payload, err := sendclientmessagejob.MarshalPayload(msgID)
-	require.NoError(t, err)
-
-	err = job.Handle(ctx, payload)
+	err = job.Handle(ctx, simpleid.MustMarshal(msgID))
 	require.NoError(t, err)
 }
 
-type eqPublishEventMatcher struct {
-	msg messagesrepo.Message
+var _ gomock.Matcher = newMessageEventMatcher{}
+
+type newMessageEventMatcher struct {
+	*eventstream.NewMessageEvent
 }
 
-func (e eqPublishEventMatcher) Matches(x any) bool {
-	arg, ok := x.(*eventstream.NewMessageEvent)
+func (m newMessageEventMatcher) Matches(x any) bool {
+	envelope, ok := x.(eventstream.Event)
 	if !ok {
 		return false
 	}
 
-	if e.msg.RequestID != arg.RequestID {
-		return false
-	}
-	if e.msg.ChatID != arg.ChatID {
-		return false
-	}
-	if e.msg.ID != arg.MessageID {
-		return false
-	}
-	if e.msg.AuthorID != arg.UserID {
-		return false
-	}
-	if e.msg.CreatedAt != arg.CreatedAt {
-		return false
-	}
-	if e.msg.Body != arg.MessageBody {
-		return false
-	}
-	if e.msg.IsService != arg.IsService {
+	ev, ok := envelope.(*eventstream.NewMessageEvent)
+	if !ok {
 		return false
 	}
 
-	return true
+	return !ev.EventID.IsZero() &&
+		ev.RequestID == m.RequestID &&
+		ev.ChatID == m.ChatID &&
+		ev.MessageID == m.MessageID &&
+		ev.AuthorID == m.AuthorID &&
+		ev.CreatedAt.Equal(m.CreatedAt) &&
+		ev.MessageBody == m.MessageBody &&
+		ev.IsService == m.IsService
 }
 
-func (e eqPublishEventMatcher) String() string {
-	return fmt.Sprintf("matches msg %v", e.msg)
-}
-
-func EqPublishEventParams(msg messagesrepo.Message) gomock.Matcher {
-	return eqPublishEventMatcher{msg}
+func (m newMessageEventMatcher) String() string {
+	return fmt.Sprintf("%v", m.NewMessageEvent)
 }

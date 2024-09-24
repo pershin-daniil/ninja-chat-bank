@@ -42,14 +42,14 @@ import (
 {{ range $, $typeName := .Types }}
 var {{ $typeName }}Nil = {{ $typeName }}(uuid.Nil)
 
-type {{ $typeName }} uuid.UUID
-func New{{ $typeName }}() {{ $typeName }} { return {{ $typeName }}(uuid.New()) }
-func (t {{ $typeName }}) String() string { return uuid.UUID(t).String() }
-func (t {{ $typeName }}) Value() (driver.Value, error) { return t.String(), nil }
-func (t *{{ $typeName }}) Scan(src any) error { return (*uuid.UUID)(t).Scan(src) }
-func (t {{ $typeName }}) MarshalText() ([]byte, error) { return uuid.UUID(t).MarshalText() }
+type {{ $typeName }} uuid.UUID                             //
+func New{{ $typeName }}() {{ $typeName }}                  { return {{ $typeName }}(uuid.New()) }
+func (t {{ $typeName }}) String() string                   { return uuid.UUID(t).String() }
+func (t {{ $typeName }}) Value() (driver.Value, error)     { return t.String(), nil }
+func (t *{{ $typeName }}) Scan(src any) error              { return (*uuid.UUID)(t).Scan(src) }
+func (t {{ $typeName }}) MarshalText() ([]byte, error)     { return uuid.UUID(t).MarshalText() }
 func (t *{{ $typeName }}) UnmarshalText(data []byte) error { return (*uuid.UUID)(t).UnmarshalText(data) }
-func (t {{ $typeName }}) IsZero() bool { return t == {{ $typeName }}Nil }
+func (t {{ $typeName }}) IsZero() bool                     { return t == {{ $typeName }}Nil }
 func (t {{ $typeName }}) Matches(x any) bool {
 	v, ok := x.({{ $typeName }})
 	if !ok {
@@ -62,6 +62,12 @@ func (t {{ $typeName }}) Validate() error {
 		return errors.New("zero {{ $typeName }}")
 	}
 	return nil
+}
+func (t {{ $typeName }}) AsPointer() *{{ $typeName }} {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
 }
 {{ end }}
 
@@ -96,7 +102,7 @@ func run(pkg string, types []string, outFile string) error {
 	data, err := format.Source(b.Bytes())
 	if err != nil {
 		log.Println(b.String())
-		return fmt.Errorf("failed to go fmt: %v", err)
+		return fmt.Errorf("go fmt: %v", err)
 	}
 
 	return os.WriteFile(outFile, data, 0o644) //nolint:gosec // rw-r--r--

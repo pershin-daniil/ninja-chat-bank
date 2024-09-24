@@ -28,10 +28,7 @@ func NewOptions(
 	// Setting defaults from field tag (if present)
 	o.backoffInitialInterval, _ = time.ParseDuration("100ms")
 	o.backoffMaxElapsedTime, _ = time.ParseDuration("5s")
-	o.backoffFactor = 5
 	o.processBatchSize = 1
-	o.processBatchMaxTimeout, _ = time.ParseDuration("100ms")
-	o.retries = 3
 
 	o.brokers = brokers
 	o.consumers = consumers
@@ -61,12 +58,6 @@ func WithBackoffMaxElapsedTime(opt time.Duration) OptOptionsSetter {
 	}
 }
 
-func WithBackoffFactor(opt float64) OptOptionsSetter {
-	return func(o *Options) {
-		o.backoffFactor = opt
-	}
-}
-
 func WithVerdictsSignKey(opt string) OptOptionsSetter {
 	return func(o *Options) {
 		o.verdictsSignKey = opt
@@ -79,30 +70,15 @@ func WithProcessBatchSize(opt int) OptOptionsSetter {
 	}
 }
 
-func WithProcessBatchMaxTimeout(opt time.Duration) OptOptionsSetter {
-	return func(o *Options) {
-		o.processBatchMaxTimeout = opt
-	}
-}
-
-func WithRetries(opt int) OptOptionsSetter {
-	return func(o *Options) {
-		o.retries = opt
-	}
-}
-
 func (o *Options) Validate() error {
 	errs := new(errors461e464ebed9.ValidationErrors)
 	errs.Add(errors461e464ebed9.NewValidationError("backoffInitialInterval", _validate_Options_backoffInitialInterval(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("backoffMaxElapsedTime", _validate_Options_backoffMaxElapsedTime(o)))
-	errs.Add(errors461e464ebed9.NewValidationError("backoffFactor", _validate_Options_backoffFactor(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("brokers", _validate_Options_brokers(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("consumers", _validate_Options_consumers(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("consumerGroup", _validate_Options_consumerGroup(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("verdictsTopic", _validate_Options_verdictsTopic(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("processBatchSize", _validate_Options_processBatchSize(o)))
-	errs.Add(errors461e464ebed9.NewValidationError("processBatchMaxTimeout", _validate_Options_processBatchMaxTimeout(o)))
-	errs.Add(errors461e464ebed9.NewValidationError("retries", _validate_Options_retries(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("readerFactory", _validate_Options_readerFactory(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("dlqWriter", _validate_Options_dlqWriter(o)))
 	errs.Add(errors461e464ebed9.NewValidationError("txtor", _validate_Options_txtor(o)))
@@ -121,13 +97,6 @@ func _validate_Options_backoffInitialInterval(o *Options) error {
 func _validate_Options_backoffMaxElapsedTime(o *Options) error {
 	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.backoffMaxElapsedTime, "min=500ms,max=1m"); err != nil {
 		return fmt461e464ebed9.Errorf("field `backoffMaxElapsedTime` did not pass the test: %w", err)
-	}
-	return nil
-}
-
-func _validate_Options_backoffFactor(o *Options) error {
-	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.backoffFactor, "min=1.01,max=10"); err != nil {
-		return fmt461e464ebed9.Errorf("field `backoffFactor` did not pass the test: %w", err)
 	}
 	return nil
 }
@@ -161,22 +130,8 @@ func _validate_Options_verdictsTopic(o *Options) error {
 }
 
 func _validate_Options_processBatchSize(o *Options) error {
-	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.processBatchSize, "min=1,max=1000"); err != nil {
+	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.processBatchSize, "min=1"); err != nil {
 		return fmt461e464ebed9.Errorf("field `processBatchSize` did not pass the test: %w", err)
-	}
-	return nil
-}
-
-func _validate_Options_processBatchMaxTimeout(o *Options) error {
-	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.processBatchMaxTimeout, "min=50ms,max=10s"); err != nil {
-		return fmt461e464ebed9.Errorf("field `processBatchMaxTimeout` did not pass the test: %w", err)
-	}
-	return nil
-}
-
-func _validate_Options_retries(o *Options) error {
-	if err := validator461e464ebed9.GetValidatorFor(o).Var(o.retries, "min=1,max=10"); err != nil {
-		return fmt461e464ebed9.Errorf("field `retries` did not pass the test: %w", err)
 	}
 	return nil
 }
